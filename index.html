@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warcaby 100-polowe Trainer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Warcaby Trainer (10x10)</h1>
+        <div class="game-area">
+            <canvas id="board" width="500" height="500"></canvas>
+            <div class="info-panel">
+                <div id="thermometer">
+                    <h3>Termometr prawidłowości: <span id="score">--</span>%</h3>
+                    <div class="thermometer">
+                        <div id="bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <div id="best-moves">
+                    <h3>Najlepsze 3 ścieżki (depth 3):</h3>
+                    <ul id="moves-list"></ul>
+                    <button onclick="showBestMoves()">Pokaż najlepsze ruchy</button>
+                </div>
+            </div>
+        </div>
+        <p>Kliknij na pionek i docelowe pole, aby wykonać ruch (białe pionki na dole).</p>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
