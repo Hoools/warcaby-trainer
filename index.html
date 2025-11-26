@@ -1,26 +1,19 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Warcaby Trainer</title>
-  <link rel="stylesheet" href="assets/css/style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warcaby Trainer</title>
+    <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-  <div id="app">
-    <h1>Warcaby Trainer 10x10</h1>
-    <div id="board"></div>
-    <div id="controls"></div>
-    <div id="status"></div>
-  </div>
+    <div id="game-container">
+        <div id="status">Na ruchu: white</div>
+        <div id="board"></div>
+        <div id="controls"></div>
+    </div>
 
-  <script type="module" src="./main.js"></script>
-  <script type="module" src="./ui/ui-board.js"></script>
-  <script type="module" src="./ui/ui-controls.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      initUI();
-    });
-  </script>
+    <!-- Jedyny skrypt, którego potrzebujesz -->
+    <script type="module" src="./src/main.js"></script>
 </body>
 </html>
