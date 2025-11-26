@@ -1,6 +1,6 @@
-// tests/gameTests.js
-import { gameState } from '../src/core/gameState.js';
-import { getPossibleCapturesForPiece } from '../src/core/rules.js';
+import { gameState } from '../core/gameState.js';
+import { getPossibleCapturesForPiece } from '../core/rules.js';
+
 
 export const gameTests = {
     'Pojedyncze bicie zwykłym pionkiem': ({ placePiece, assert }) => {

@@ -1,7 +1,8 @@
-// tests/testRunner.js
-import { gameState } from '../src/core/gameState.js';
-import { getValidMovesForPiece, makeMove } from '../src/ui/ui-board.js'; // Będziemy testować logikę UI/Gry
-import { getPossibleCapturesForPiece, hasAnyCapture } from '../src/core/rules.js';
+// Jest (poprawnie wewnątrz src):
+import { gameState } from '../core/gameState.js';
+import { getValidMovesForPiece, makeMove } from '../ui/ui-board.js';
+import { getPossibleCapturesForPiece, hasAnyCapture } from '../core/rules.js';
+
 
 // Pomocnicza funkcja do czyszczenia planszy
 function clearBoard() {
