@@ -70,10 +70,19 @@ export function renderBoard() {
 }
 
 function onSquareClick(row, col) {
-  // 1. Tryb wymuszonej kontynuacji bicia (multijump)
+  // --- LOGIKA EDYTORA ---
+  if (gameState.isEditorMode) {
+      // Tylko na czarnych polach (tam gdzie gramy)
+      if ((row + col) % 2 !== 0) {
+          gameState.grid[row][col] = gameState.selectedEditorPiece;
+          renderBoard();
+      }
+      return; // Kończymy, nie wykonujemy logiki gry
+  }
+
+  // --- LOGIKA GRY (stara) ---
   if (pieceLockedForCapture) {
-      if (selectedSquare.row === row && selectedSquare.col === col) return; // Kliknięcie w siebie
-      
+      if (selectedSquare.row === row && selectedSquare.col === col) return;
       const move = validMovesForSelected.find(m => m.toRow === row && m.toCol === col);
       if (move) {
           makeMove(selectedSquare.row, selectedSquare.col, row, col, true);
@@ -84,23 +93,19 @@ function onSquareClick(row, col) {
   }
 
   const piece = gameState.grid[row][col];
-
-  // Nie można wybrać pionka, który jest "martwy" (w pendingCaptures)
+  // Nie można wybrać pionka, który już został "przeskoczony" w tej turze
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
 
-  // 2. Wybór pionka
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     selectedSquare = { row, col };
     validMovesForSelected = getValidMovesForPiece(row, col);
-    renderBoard(); // Przerenderuj, aby zaktualizować podświetlenia
+    renderBoard(); 
   } 
-  // 3. Wykonanie ruchu (kliknięcie na puste pole)
   else if (selectedSquare) {
     const move = validMovesForSelected.find((m) => m.toRow === row && m.toCol === col);
     if (move) {
       makeMove(selectedSquare.row, selectedSquare.col, row, col, move.isCapture);
     } else {
-      // Kliknięcie w puste pole, które nie jest ruchem -> odznaczenie
       selectedSquare = null;
       validMovesForSelected = [];
       renderBoard();
@@ -108,7 +113,7 @@ function onSquareClick(row, col) {
   }
 }
 
-function getValidMovesForPiece(row, col) {
+export function getValidMovesForPiece(row, col) {
   const player = gameState.currentPlayer;
   const mandatoryCapture = hasAnyCapture(gameState.grid, player);
   
