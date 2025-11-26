@@ -71,9 +71,6 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
   return false;
 }
 
-// Główna funkcja generująca możliwe bicia (pojedynczy skok)
-// 'piece' jest opcjonalne, jeśli nie podane, pobiera z planszy.
-// Ale w rekurencji MUSI być podane (bo na planszy pionka już nie ma w miejscu startu symulacji).
 export function getPossibleCaptures(board, row, col, piece, pendingCaptures = []) {
   const currentPiece = piece || board[row][col];
   if (!currentPiece) return [];
@@ -123,27 +120,10 @@ export function getPossibleCaptures(board, row, col, piece, pendingCaptures = []
   return captures;
 }
 
-// Wrapper dla kompatybilności wstecznej
 export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = []) {
     return getPossibleCaptures(board, row, col, board[row][col], pendingCaptures);
 }
 
-export function hasAnyCapture(board, player) {
-  for (let r = 0; r < 10; r++) {
-    for (let c = 0; c < 10; c++) {
-      const piece = board[r][c];
-      if (piece && piece.startsWith(player)) {
-        if (getPossibleCaptures(board, r, c, piece, []).length > 0) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-// Rekurencyjne liczenie maksymalnej głębokości bicia
-// UWAGA: Musi przyjmować 'piece', bo w trakcie symulacji plansza jest pusta w miejscu 'row, col'
 export function calculateMaxCaptures(board, row, col, piece, pendingCaptures = []) {
     const possibleMoves = getPossibleCaptures(board, row, col, piece, pendingCaptures);
     if (possibleMoves.length === 0) return 0;
@@ -155,20 +135,16 @@ export function calculateMaxCaptures(board, row, col, piece, pendingCaptures = [
         const newPending = [...pendingCaptures];
         if (captured) newPending.push(captured);
 
-        // Przekazujemy 'piece' dalej, bo to ten sam pionek skacze dalej
         const depth = 1 + calculateMaxCaptures(board, toR, toC, piece, newPending);
         if (depth > maxDepth) maxDepth = depth;
     });
     return maxDepth;
 }
 
-// --- GŁÓWNA FUNKCJA WALIDUJĄCA ---
-
 export function getValidMoves(board, row, col, player, pendingCaptures = []) {
     let globalMax = 0;
-    const movingPiece = board[row][col]; // Zapamiętujemy pionka, który się rusza
+    const movingPiece = board[row][col]; 
 
-    // 1. Oblicz globalny max bić (tylko na początku tury)
     if (pendingCaptures.length === 0) {
         for(let r=0; r<10; r++) {
             for(let c=0; c<10; c++) {
@@ -180,13 +156,13 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
             }
         }
     } else {
-        globalMax = 0; // W trakcie sekwencji nie sprawdzamy innych
+        globalMax = 0; 
     }
 
-    // 2. Brak bić -> Zwykłe ruchy
     if (globalMax === 0 && pendingCaptures.length === 0) {
         const simpleMoves = [];
-        const isKing = movingPiece.includes('king');
+        const piece = board[row][col];
+        const isKing = piece.includes('king');
         const directions = isKing ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] : (player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]]);
         
         directions.forEach(([dr, dc]) => {
@@ -205,16 +181,12 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
         return simpleMoves;
     }
 
-    // 3. Są bicia -> Sprawdź ten pionek
-    // Przekazujemy movingPiece, bo calculateMaxCaptures tego wymaga w rekurencji
     const myMaxCaptures = calculateMaxCaptures(board, row, col, movingPiece, pendingCaptures);
     
-    // Jeśli to początek tury i pionek ma mniej bić niż globalny lider -> brak ruchów
     if (pendingCaptures.length === 0 && myMaxCaptures < globalMax) {
         return [];
     }
 
-    // 4. Zwróć ruchy prowadzące do max wyniku
     const captureMoves = getPossibleCaptures(board, row, col, movingPiece, pendingCaptures);
     const movesWithDepth = captureMoves.map(move => {
          const [toR, toC] = move;
@@ -229,4 +201,29 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
     if (movesWithDepth.length === 0) return [];
     const myBestPath = Math.max(...movesWithDepth.map(m => m.totalVal));
     return movesWithDepth.filter(m => m.totalVal === myBestPath);
+}
+
+// --- DETEKCJA KOŃCA GRY ---
+
+export function canPlayerMove(board, player) {
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 10; c++) {
+            const piece = board[r][c];
+            if (piece && piece.startsWith(player)) {
+                const moves = getValidMoves(board, r, c, player, []);
+                if (moves.length > 0) {
+                    return true; 
+                }
+            }
+        }
+    }
+    return false; 
+}
+
+export function checkGameState(board, currentPlayer) {
+    if (!canPlayerMove(board, currentPlayer)) {
+        // Jeśli obecny gracz nie ma ruchów, wygrywa przeciwnik
+        return currentPlayer === 'white' ? 'black' : 'white';
+    }
+    return null; 
 }

@@ -1,8 +1,7 @@
 // src/ui/ui-board.js
 import { gameState } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
-// Importujemy nową główną funkcję z rules
-import { getValidMoves, getPossibleCapturesForPiece, findCapturedPieceBetween } from '../core/rules.js';
+import { getValidMoves, getPossibleCapturesForPiece, findCapturedPieceBetween, checkGameState } from '../core/rules.js';
 
 let selectedSquare = null;
 let validMovesForSelected = [];
@@ -151,9 +150,7 @@ function onSquareClick(row, col) {
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
 
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
-    // TU ZMIANA: Wywołanie czystej funkcji z rules.js z przekazaniem stanu
     const moves = getValidMoves(gameState.grid, row, col, gameState.currentPlayer, pendingCaptures);
-    
     selectedSquare = { row, col };
     validMovesForSelected = moves;
     renderBoard(); 
@@ -184,9 +181,7 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
 
     const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
     if (nextCaptures.length > 0) {
-      // Sprawdzamy legalność kolejnych ruchów używając nowej funkcji rules
       const validNext = getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures);
-      
       if (validNext.length > 0) {
           moreCapturesAvailable = true;
           pieceLockedForCapture = true;
@@ -216,6 +211,15 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
   updateCurrentPlayerDisplay();
   renderBoard();
+
+  // Detekcja końca gry
+  const winner = checkGameState(gameState.grid, gameState.currentPlayer);
+  if (winner) {
+      setTimeout(() => {
+          const winnerName = winner === 'white' ? 'Białe' : 'Czarne';
+          alert(`KONIEC GRY! Wygrywają: ${winnerName}`);
+      }, 100);
+  }
 }
 
 function highlightValidMoves(moves) {
