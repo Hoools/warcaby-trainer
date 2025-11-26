@@ -1,8 +1,11 @@
-// Jest (poprawnie wewnątrz src):
+// src/tests/testRunner.js
 import { gameState } from '../core/gameState.js';
-import { getValidMovesForPiece, makeMove } from '../ui/ui-board.js';
-import { getPossibleCapturesForPiece, hasAnyCapture } from '../core/rules.js';
 
+// POPRAWKA: Usuwamy import z ui-board.js, bo logika jest teraz w rules.js
+// import { getValidMovesForPiece, makeMove } from '../ui/ui-board.js'; 
+
+// Importujemy wszystko co potrzebne z rules.js
+import { getValidMoves, getPossibleCapturesForPiece } from '../core/rules.js';
 
 // Pomocnicza funkcja do czyszczenia planszy
 function clearBoard() {

@@ -1,7 +1,8 @@
 // src/ui/ui-board.js
 import { gameState } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
-import { isValidMove, getPossibleCapturesForPiece, findCapturedPieceBetween, calculateMaxCaptures } from '../core/rules.js';
+// Importujemy nową główną funkcję z rules
+import { getValidMoves, getPossibleCapturesForPiece, findCapturedPieceBetween } from '../core/rules.js';
 
 let selectedSquare = null;
 let validMovesForSelected = [];
@@ -68,7 +69,6 @@ export function renderBoard() {
 
       if (!square) continue; 
       
-      // Resetuj zawartość
       square.innerHTML = '';
       square.classList.remove('highlight');
       
@@ -97,7 +97,7 @@ export function renderBoard() {
   }
   
   highlightValidMoves(validMovesForSelected);
-  try { updateBoardStateDisplay(); } catch(e) { console.warn("Panel boczny error:", e); }
+  try { updateBoardStateDisplay(); } catch(e) { console.warn(e); }
 }
 
 function updateBoardStateDisplay() {
@@ -151,7 +151,9 @@ function onSquareClick(row, col) {
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
 
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
-    const moves = getValidMovesForPiece(row, col);
+    // TU ZMIANA: Wywołanie czystej funkcji z rules.js z przekazaniem stanu
+    const moves = getValidMoves(gameState.grid, row, col, gameState.currentPlayer, pendingCaptures);
+    
     selectedSquare = { row, col };
     validMovesForSelected = moves;
     renderBoard(); 
@@ -165,64 +167,6 @@ function onSquareClick(row, col) {
       renderBoard();
     }
   }
-}
-
-export function getValidMovesForPiece(row, col) {
-    const player = gameState.currentPlayer;
-    let globalMax = 0;
-
-    if (pendingCaptures.length === 0) {
-        for(let r=0; r<10; r++) {
-            for(let c=0; c<10; c++) {
-                const p = gameState.grid[r][c];
-                if(p && p.startsWith(player)) {
-                    const m = calculateMaxCaptures(gameState.grid, r, c, []);
-                    if(m > globalMax) globalMax = m;
-                }
-            }
-        }
-    } else {
-        globalMax = 0; 
-    }
-
-    if (globalMax === 0 && pendingCaptures.length === 0) {
-        const simpleMoves = [];
-        const piece = gameState.grid[row][col];
-        const isKing = piece.includes('king');
-        const directions = isKing ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] : (player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]]);
-        directions.forEach(([dr, dc]) => {
-            if (isKing) {
-                let r = row + dr, c = col + dc;
-                while (isValidMove(gameState.grid, row, col, r, c, player)) {
-                    simpleMoves.push({ toRow: r, toCol: c, isCapture: false });
-                    r += dr; c += dc;
-                    if (r<0||r>9||c<0||c>9) break;
-                }
-            } else {
-                const r = row + dr, c = col + dc;
-                if (isValidMove(gameState.grid, row, col, r, c, player)) simpleMoves.push({ toRow: r, toCol: c, isCapture: false });
-            }
-        });
-        return simpleMoves;
-    }
-
-    const myMaxCaptures = calculateMaxCaptures(gameState.grid, row, col, pendingCaptures);
-    
-    if (pendingCaptures.length === 0 && myMaxCaptures < globalMax) return [];
-
-    const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col, pendingCaptures);
-    const movesWithDepth = captureMoves.map(move => {
-         const [toR, toC] = move;
-         const captured = findCapturedPieceBetween(gameState.grid, row, col, toR, toC);
-         const newPending = [...pendingCaptures];
-         if(captured) newPending.push(captured);
-         const further = calculateMaxCaptures(gameState.grid, toR, toC, newPending);
-         return { toRow: toR, toCol: toC, isCapture: true, totalVal: 1 + further };
-    });
-
-    if (movesWithDepth.length === 0) return [];
-    const myBestPath = Math.max(...movesWithDepth.map(m => m.totalVal));
-    return movesWithDepth.filter(m => m.totalVal === myBestPath);
 }
 
 export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
@@ -240,7 +184,9 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
 
     const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
     if (nextCaptures.length > 0) {
-      const validNext = getValidMovesForPiece(toRow, toCol);
+      // Sprawdzamy legalność kolejnych ruchów używając nowej funkcji rules
+      const validNext = getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures);
+      
       if (validNext.length > 0) {
           moreCapturesAvailable = true;
           pieceLockedForCapture = true;
