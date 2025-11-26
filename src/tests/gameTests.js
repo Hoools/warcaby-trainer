@@ -69,5 +69,27 @@ export const gameTests = {
         const pending2 = [{r: 2, c: 2}];
         const captures2 = getPossibleCapturesForPiece(gameState.grid, 3, 3, pending2);
         assert(captures2.some(m => m[0] === 5 && m[1] === 1), "Powinna być opcja bicia drugiego pionka i lądowania na 5,1");
+    },
+    
+    'Damka: Wymuszenie najlepszego lądowania (37->23->8)': ({ placePiece, assert }) => {
+        // 37=(7,2), 23=(4,5), 8=(1,4)
+        // Lądowania po 23: 19=(3,6), 14=(2,7), 10=(1,8), 5=(0,9)
+        
+        placePiece(7, 2, 'white_king');
+        placePiece(4, 5, 'black');
+        placePiece(1, 4, 'black');
+        
+        // Pobierz LEGALNE ruchy (już przefiltrowane przez logikę Max Capture)
+        const moves = getValidMovesForPiece(7, 2);
+        
+        // Powinien być tylko ruch na 19 (3,6), bo tylko on pozwala bić dalej (pionka 8)
+        // Ruchy na 14, 10, 5 dają tylko 1 bicie, a ruch na 19 daje 2 bicia.
+        
+        const landsOn19 = moves.some(m => m.toRow === 3 && m.toCol === 6);
+        const landsOn14 = moves.some(m => m.toRow === 2 && m.toCol === 7);
+        
+        assert(landsOn19, "Powinien pozwolić wylądować na polu 19");
+        assert(!landsOn14, "Nie powinien pozwolić wylądować na polu 14 (bo to kończy bicie przedwcześnie)");
+        assert(moves.length === 1, "Powinien być tylko 1 legalny ruch w tej sytuacji");
     }
 };
