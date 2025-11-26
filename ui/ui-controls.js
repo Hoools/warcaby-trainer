@@ -1,4 +1,8 @@
-import { getTopMoves } from '../core/moveGenerator.js';
+import { selectBestMove } from '../core/ai.js';
+
+let aiEnabled = false;
+let aiPlayer = 'black'; // domyślnie AI gra czarnymi
+let aiDepth = 3;
 
 function initControls() {
   const controlsDiv = document.getElementById('controls');
@@ -29,51 +33,38 @@ function initControls() {
   };
   controlsDiv.appendChild(resetBtn);
 
-  const bestMovesDiv = document.createElement('div');
-  bestMovesDiv.id = 'bestMoves';
-  bestMovesDiv.style.marginTop = '10px';
-  controlsDiv.appendChild(bestMovesDiv);
+  const aiToggle = document.createElement('button');
+  aiToggle.textContent = 'Włącz/Wyłącz AI';
+  aiToggle.onclick = () => {
+    aiEnabled = !aiEnabled;
+    aiToggle.textContent = aiEnabled ? 'Wyłącz AI' : 'Włącz AI';
+    if (aiEnabled && board.currentPlayer === aiPlayer) {
+      makeAIMove();
+    }
+  };
+  controlsDiv.appendChild(aiToggle);
 
   updateBestMovesPanel();
 }
 
-function updateBestMovesPanel() {
-  const bestMovesDiv = document.getElementById('bestMoves');
-  bestMovesDiv.innerHTML = '<strong>3 najlepsze ruchy:</strong><br>';
+async function makeAIMove() {
+  if (!aiEnabled) return;
+  if (board.currentPlayer !== aiPlayer) return;
 
-  const topMoves = getTopMoves(board.grid, board.currentPlayer);
+  // Można dodać pewne opóźnienie wizualne
+  const move = selectBestMove(board.grid, board.currentPlayer, aiDepth);
+  if (move) {
+    makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+    updateCurrentPlayerDisplay();
+    renderBoard();
+    updateBestMovesPanel();
 
-  topMoves.forEach(({ move, score }, idx) => {
-    const moveStr = `${move.fromRow},${move.fromCol} → ${move.toRow},${move.toCol}`;
-    const moveButton = document.createElement('button');
-    moveButton.textContent = `${idx + 1}. ${moveStr} (ocena: ${score.toFixed(2)})`;
-    moveButton.onclick = () => {
-      highlightMoveOnBoard(move);
-    };
-    bestMovesDiv.appendChild(moveButton);
-    bestMovesDiv.appendChild(document.createElement('br'));
-  });
+    // Jeśli po ruchu AI jest ponowna tura AI (np. wielokrotne bicie)
+    if (board.currentPlayer === aiPlayer) {
+      await new Promise(r => setTimeout(r, 500));
+      makeAIMove();
+    }
+  }
 }
 
-function highlightMoveOnBoard(move) {
-  // Podświetl ruch wybrany w panelu najlepszych ruchów
-  clearHighlights();
-
-  const fromSquare = document.querySelector(
-    `#board .square[data-row='${move.fromRow}'][data-col='${move.fromCol}']`
-  );
-  const toSquare = document.querySelector(
-    `#board .square[data-row='${move.toRow}'][data-col='${move.toCol}']`
-  );
-
-  if (fromSquare) fromSquare.classList.add('highlight-best-move');
-  if (toSquare) toSquare.classList.add('highlight-best-move');
-}
-
-function clearHighlights() {
-  document.querySelectorAll('#board .square.highlight-best-move').forEach((sq) => {
-    sq.classList.remove('highlight-best-move');
-  });
-}
-
-export { initControls, updateBestMovesPanel };
+export { initControls, makeAIMove };
