@@ -351,3 +351,89 @@ function simulateCaptureChain(board, fromRow, fromCol, toRow, toCol, player, cap
     const [nextR, nextC] = furtherCaptures[0];
     return simulateCaptureChain(board, toRow, toCol, nextR, nextC, player, capturedSoFar);
 }
+
+// ===========================
+// KONWERSJA OCENY NA PROCENTY (jak Stockfish)
+// ===========================
+
+/**
+ * Konwertuje surową ocenę pozycji na procent szans na wygraną
+ * Używa funkcji sigmoidalnej podobnej do Stockfish
+ * 
+ * @param {number} score - Surowa ocena z minimax (-∞ do +∞)
+ * @param {string} player - Kolor gracza ('white' lub 'black')
+ * @returns {number} - Procent szans na wygraną (0-100)
+ */
+export function scoreToWinPercentage(score, player) {
+    // Normalizacja - im wyższa ocena, tym lepiej dla 'player'
+    // Używamy funkcji sigmoidalnej: win% = 100 / (1 + e^(-score/scale))
+
+    const SCALE = 200; // Współczynnik skalowania (dostosuj dla lepszego mapowania)
+
+    // Dla przegrywającego odwracamy znak
+    const normalizedScore = score;
+
+    // Funkcja sigmoidalna
+    const winProb = 100 / (1 + Math.exp(-normalizedScore / SCALE));
+
+    return Math.max(0, Math.min(100, winProb)); // Ograniczamy do 0-100
+}
+
+/**
+ * Zwraca ocenę dla najlepszego ruchu wraz z oceną alternatywnych ruchów
+ * @returns {Object} { bestMove, evaluation: { score, winPercent, player }, topMoves: [...] }
+ */
+export function getBestMoveWithEvaluation(board, player, depth = 7) {
+    TRANSPOSITION_TABLE.clear();
+
+    const boardCopy = JSON.parse(JSON.stringify(board));
+    const startTime = Date.now();
+
+    console.log(`AI rozpoczyna analizę z oceną dla gracza: ${player}, głębokość: ${depth}`);
+
+    // Pobierz wszystkie ruchy i oceń każdy
+    const opponentColor = player === 'white' ? 'black' : 'white';
+    const validMoves = getAllMovesForPlayer(boardCopy, player);
+
+    if (validMoves.length === 0) {
+        return { 
+            bestMove: null, 
+            evaluation: { score: -10000, winPercent: 0, player },
+            topMoves: []
+        };
+    }
+
+    sortMoves(validMoves, boardCopy, player, true);
+
+    const evaluatedMoves = [];
+
+    for (const move of validMoves) {
+        const newBoard = simulateCompleteMove(boardCopy, move, player);
+        const evalResult = minimax(newBoard, depth - 1, -Infinity, Infinity, false, player);
+
+        evaluatedMoves.push({
+            move,
+            score: evalResult.score,
+            winPercent: scoreToWinPercentage(evalResult.score, player)
+        });
+    }
+
+    // Sortuj po ocenie (najlepsze pierwsze)
+    evaluatedMoves.sort((a, b) => b.score - a.score);
+
+    const bestMove = evaluatedMoves[0];
+    const elapsed = Date.now() - startTime;
+
+    console.log(`AI (${player}) najlepszy ruch: ocena ${bestMove.score.toFixed(2)}, szansa wygranej: ${bestMove.winPercent.toFixed(1)}%`);
+    console.log(`Czas: ${elapsed}ms, pozycji: ${TRANSPOSITION_TABLE.size}`);
+
+    return {
+        bestMove: bestMove.move,
+        evaluation: {
+            score: bestMove.score,
+            winPercent: bestMove.winPercent,
+            player
+        },
+        topMoves: evaluatedMoves.slice(0, 5) // Top 5 ruchów z ocenami
+    };
+}

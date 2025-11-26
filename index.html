@@ -7,6 +7,31 @@
     <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
+    <div class="evaluation-panel">
+        <div class="eval-header">
+            <h3>Ocena pozycji</h3>
+            <button id="toggle-analysis" class="btn-small">Analiza ON/OFF</button>
+        </div>
+
+        <!-- Pasek oceny jak w Stockfish -->
+        <div class="eval-bar-container">
+            <div class="eval-bar-wrapper">
+                <div class="eval-bar-black" id="evalBarBlack">
+                    <span class="eval-percentage" id="blackPercentage">50%</span>
+                </div>
+                <div class="eval-bar-white" id="evalBarWhite">
+                    <span class="eval-percentage" id="whitePercentage">50%</span>
+                </div>
+            </div>
+            <div class="eval-score" id="evalScore">+0.00</div>
+        </div>
+
+        <!-- Top 5 najlepszych ruchów -->
+        <div class="top-moves">
+            <h4>Najlepsze ruchy</h4>
+            <div id="topMovesList"></div>
+        </div>
+    </div>
     <div id="game-container">
         <!-- Lewa kolumna: Gra -->
         <div id="main-column">
@@ -26,3 +51,4 @@
     <script type="module" src="./src/main.js"></script>
 </body>
 </html>
+
