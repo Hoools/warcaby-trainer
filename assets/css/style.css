@@ -1,0 +1,41 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background: #f9f9f9;
+}
+#board {
+  width: 400px;
+  height: 400px;
+  border: 2px solid #333;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+}
+.square {
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+}
+.square.dark {
+  background-color: brown;
+}
+.square.light {
+  background-color: beige;
+}
+.pawn.white {
+  background-color: white;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  margin: 5px auto;
+}
+.pawn.black {
+  background-color: black;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  margin: 5px auto;
+}
+#controls {
+  margin-top: 10px;
+}
