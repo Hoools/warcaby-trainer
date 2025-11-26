@@ -6,7 +6,9 @@ function isSquareOnBoard(r, c) {
 
 function isOpponent(p1, p2) {
   if (!p1 || !p2 || p1 === 0 || p2 === 0) return false;
-  return p1[0] !== p2[0]; // 'w' vs 'b'
+  // Sprawdzamy pierwszą literę koloru ('w' vs 'b')
+  // Obsługuje: 'white', 'black', 'white_king', 'black_king'
+  return p1[0] !== p2[0]; 
 }
 
 // Pomocnicza: czy droga po przekątnej jest pusta?
@@ -28,6 +30,7 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
   if (board[toRow][toCol] !== 0) return false;
 
   const piece = board[fromRow][fromCol];
+  // Upewniamy się, że ruszamy własnym pionkiem/damką
   if (!piece || !piece.startsWith(player)) return false;
 
   const isKing = piece.includes('king');
@@ -37,7 +40,7 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
   // Musi być ruch po przekątnej
   if (Math.abs(dr) !== Math.abs(dc)) return false;
 
-  // --- Logika ZWYKŁEGO pionka ---
+  // --- ZWYKŁY PIONEK ---
   if (!isKing) {
       // Ruch prosty (1 pole)
       if (Math.abs(dr) === 1) {
@@ -53,15 +56,20 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
           return isOpponent(piece, jumpedPiece);
       }
   } 
-  // --- Logika DAMKI (Latająca) ---
+  // --- DAMKA ---
   else {
-      // Ruch o dowolną liczbę pól, o ile droga jest pusta
+      // Ruch bez bicia: Droga musi być pusta
+      // (Bicie jest sprawdzane osobno przez mechanizm capture)
       return isPathClear(board, fromRow, fromCol, toRow, toCol);
   }
 
   return false;
 }
 
+/**
+ * Zwraca listę dostępnych pól docelowych dla bicia.
+ * pendingCaptures - lista współrzędnych pionków, które zostały już "przeskoczone" w tej sekwencji.
+ */
 export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = []) {
   const piece = board[row][col];
   if (!piece) return [];
@@ -71,43 +79,55 @@ export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = [
   const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
   directions.forEach(([dr, dc]) => {
-    // --- DAMKA (Flying capture) ---
+    // --- DAMKA (Latające bicie) ---
     if (isKing) {
-        // Skanuj w danym kierunku
         let dist = 1;
+        let foundEnemy = false;
+        let enemyPos = null;
+
         while (true) {
-            const rEnemy = row + (dr * dist);
-            const cEnemy = col + (dc * dist);
+            const rCurrent = row + (dr * dist);
+            const cCurrent = col + (dc * dist);
             
-            if (!isSquareOnBoard(rEnemy, cEnemy)) break;
+            // Wyjście poza planszę
+            if (!isSquareOnBoard(rCurrent, cCurrent)) break;
             
-            const cellContent = board[rEnemy][cEnemy];
+            const cellContent = board[rCurrent][cCurrent];
             
-            // 1. Jeśli spotkasz swój pionek -> koniec szukania w tym kierunku
-            if (cellContent !== 0 && !isOpponent(piece, cellContent)) break;
-            
-            // 2. Jeśli spotkasz wroga
-            if (isOpponent(piece, cellContent)) {
-                // Sprawdź, czy ten wróg nie został już zbity w tej turze
-                const alreadyJumped = pendingCaptures.some(cap => cap.r === rEnemy && cap.c === cEnemy);
-                if (alreadyJumped) break; // Nie można bić 2x tego samego
+            // 1. Jeszcze nie znaleziono wroga
+            if (!foundEnemy) {
+                // Jeśli trafimy na swój pionek -> koniec w tym kierunku
+                if (cellContent !== 0 && !isOpponent(piece, cellContent)) break;
 
-                // 3. Sprawdź pola ZA wrogiem (miejsca lądowania)
-                let landDist = 1;
-                while (true) {
-                    const rLand = rEnemy + (dr * landDist);
-                    const cLand = cEnemy + (dc * landDist);
+                // Jeśli trafimy na wroga
+                if (isOpponent(piece, cellContent)) {
+                    // Sprawdź czy ten wróg nie jest już "martwy" (w pendingCaptures)
+                    const alreadyJumped = pendingCaptures.some(cap => cap.r === rCurrent && cap.c === cCurrent);
                     
-                    if (!isSquareOnBoard(rLand, cLand)) break;
-                    if (board[rLand][cLand] !== 0) break; // Blokada za wrogiem
-
-                    // Znaleziono legalne miejsce lądowania!
-                    captures.push([rLand, cLand]);
-                    
-                    landDist++;
+                    if (alreadyJumped) {
+                        // Traktujemy martwego wroga jak puste pole? 
+                        // Nie, w warcabach NIE MOŻNA przeskakiwać 2x przez tę samą bierkę, 
+                        // ale nie można też stawać na niej. Martwy pionek blokuje drogę do czasu zdjęcia.
+                        // Więc jeśli trafimy na alreadyJumped -> KONIEC w tym kierunku.
+                        break; 
+                    } else {
+                        // Znaleziono "żywego" wroga do bicia
+                        foundEnemy = true;
+                        enemyPos = { r: rCurrent, c: cCurrent };
+                    }
                 }
-                break; // Po znalezieniu wroga i sprawdzeniu pól za nim, kończymy ten kierunek
+                // Jeśli puste pole -> idziemy dalej szukać wroga
+            } 
+            // 2. Już znaleziono wroga (szukamy miejsca do lądowania)
+            else {
+                if (cellContent !== 0) {
+                    // Napotkano przeszkodę (inny pionek) ZA wrogiem -> koniec bicia w tym kierunku
+                    break; 
+                }
+                // Puste pole za wrogiem -> jest to poprawne bicie
+                captures.push([rCurrent, cCurrent]);
             }
+            
             dist++;
         }
     } 
@@ -138,6 +158,7 @@ export function hasAnyCapture(board, player) {
     for (let c = 0; c < 10; c++) {
       const piece = board[r][c];
       if (piece && piece.startsWith(player)) {
+        // Sprawdzamy bicia z pustą listą pendingCaptures (start tury)
         if (getPossibleCapturesForPiece(board, r, c, []).length > 0) {
           return true;
         }
