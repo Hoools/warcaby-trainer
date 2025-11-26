@@ -1,10 +1,11 @@
 import { moveHistory } from '../core/moveHistory.js';
+import { isValidMove, getPossibleCaptures } from '../core/rules.js';
 
 let selectedSquare = null;
 let validMovesForSelected = [];
 
 // Inicjalizacja UI planszy
-function initUI() {
+export function initUI() {
   const boardDiv = document.getElementById('board');
   boardDiv.innerHTML = '';
 
@@ -95,7 +96,7 @@ function clearHighlights() {
   });
 }
 
-function makeMove(fromRow, fromCol, toRow, toCol) {
+export function makeMove(fromRow, fromCol, toRow, toCol) {
   const previousBoard = JSON.parse(JSON.stringify(board.grid));
   const previousPlayer = board.currentPlayer;
 
@@ -120,4 +121,14 @@ function makeMove(fromRow, fromCol, toRow, toCol) {
   });
 }
 
-export { initUI, makeMove };
+function renderBoard() {
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      const square = document.querySelector(
+        `#board .square[data-row='${r}'][data-col='${c}']`
+      );
+      const piece = board.grid[r][c];
+      square.textContent = piece ? piece : '';
+    }
+  }
+}

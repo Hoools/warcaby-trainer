@@ -9,15 +9,17 @@ function pieceValue(piece) {
   return 0;
 }
 
-function evaluateBoard(board, player) {
+export function evaluateBoard(board, player) {
   let whiteScore = 0;
   let blackScore = 0;
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
       const p = board[r][c];
       if (p) {
-        if (p.toLowerCase() === 'w') whiteScore += pieceValue(p);
-        else if (p.toLowerCase() === 'b') blackScore += pieceValue(p);
+        const isDamka = p === p.toUpperCase();
+        const value = isDamka ? 3 : 1;
+        if (p.toLowerCase() === 'w') whiteScore += value;
+        else if (p.toLowerCase() === 'b') blackScore += value;
       }
     }
   }
