@@ -13,13 +13,25 @@ export function initUI() {
   if (!boardDiv) return;
   boardDiv.innerHTML = '';
 
+  let squareNumber = 1; // Licznik dla notacji warcabowej
+
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
+      const isDark = (r + c) % 2 !== 0;
       const square = document.createElement('div');
-      square.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      square.className = 'square ' + (isDark ? 'dark' : 'light');
       square.dataset.row = r;
       square.dataset.col = c;
       square.addEventListener('click', () => onSquareClick(r, c));
+
+      // Dodajemy numer tylko na czarnych polach
+      if (isDark) {
+          const numberSpan = document.createElement('span');
+          numberSpan.className = 'square-number';
+          numberSpan.textContent = squareNumber++;
+          square.appendChild(numberSpan);
+      }
+
       boardDiv.appendChild(square);
     }
   }
@@ -36,15 +48,30 @@ export function updateCurrentPlayerDisplay() {
 }
 
 export function renderBoard() {
+  // Musimy zresetować licznik, żeby wiedzieć jaki numer wstawić (jeśli czyścimy innerHTML)
+  let squareNumber = 1;
+
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
       const square = document.querySelector(`#board .square[data-row='${r}'][data-col='${c}']`);
       if (!square) continue;
       
-      // Czyścimy stare zawartości i klasy
+      const isDark = (r + c) % 2 !== 0;
+      let currentNum = isDark ? squareNumber++ : null;
+
+      // Czyścimy stare zawartości (pionki)
       square.innerHTML = '';
       square.classList.remove('highlight');
       
+      // Odtwórz numer pola
+      if (currentNum !== null) {
+          const numberSpan = document.createElement('span');
+          numberSpan.className = 'square-number';
+          numberSpan.textContent = currentNum;
+          square.appendChild(numberSpan);
+      }
+      
+      // Renderuj pionek
       const pieceCode = gameState.grid[r][c]; 
       if (pieceCode !== 0) {
         const pieceDiv = document.createElement('div');
@@ -56,7 +83,6 @@ export function renderBoard() {
              if (pieceCode.includes('king')) pieceDiv.classList.add('king');
         }
         
-        // Wizualizacja "duchów" - pionków zbitych, ale jeszcze nie zdjętych
         if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) {
             pieceDiv.style.opacity = '0.4'; 
         }
@@ -65,7 +91,6 @@ export function renderBoard() {
       }
     }
   }
-  // Nałóż podświetlenia na czystą planszę
   highlightValidMoves(validMovesForSelected);
 }
 

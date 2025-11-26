@@ -45,6 +45,16 @@ body {
     position: relative;
 }
 
+.square-number {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5); /* Półprzezroczysty biały */
+    pointer-events: none; /* Żeby nie przeszkadzał w klikaniu */
+    font-family: monospace;
+}
+
 .square.light {
     background-color: #f0d9b5;
 }
