@@ -15,7 +15,7 @@ export function findCapturedPieceBetween(board, r1, c1, r2, c2) {
 export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
   if (!isSquareOnBoard(toRow, toCol) || board[toRow][toCol] !== 0) return false;
   const piece = board[fromRow][fromCol];
-  if (!piece || !piece.startsWith(player)) return false;
+  if (!piece || typeof piece !== 'string' || !piece.startsWith(player)) return false; // POPRAWKA: sprawdzenie typu
   const isKing = piece.includes('king'), dr = toRow - fromRow, dc = toCol - fromCol;
   if (Math.abs(dr) !== Math.abs(dc)) return false;
   if (!isKing) {
@@ -26,8 +26,10 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
 }
 export function getPossibleCaptures(board, row, col, piece, pendingCaptures = []) {
   const currentPiece = piece || board[row][col];
-  if (!currentPiece) return [];
-  const isKing = currentPiece.includes('king'), captures = [], directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  if (!currentPiece || currentPiece === 0) return []; // POPRAWKA
+  const isKing = typeof currentPiece === 'string' && currentPiece.includes('king'); // POPRAWKA
+  const captures = [], directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  
   directions.forEach(([dr, dc]) => {
     if (isKing) {
         let dist = 1, foundEnemy = false;
@@ -55,7 +57,6 @@ export function getPossibleCaptures(board, row, col, piece, pendingCaptures = []
   return captures;
 }
 export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = []) {
-    // Helper wrapper if needed, mostly aliases getPossibleCaptures but ensures piece comes from board
     return getPossibleCaptures(board, row, col, board[row][col], pendingCaptures);
 }
 export function calculateMaxCaptures(board, row, col, piece, pendingCaptures = []) {
@@ -74,16 +75,22 @@ export function calculateMaxCaptures(board, row, col, piece, pendingCaptures = [
 export function getValidMoves(board, row, col, player, pendingCaptures = []) {
     let globalMax = 0;
     const movingPiece = board[row][col];
+    
+    // Jeśli brak wymuszonych bić z poprzednich kroków, szukamy globalnie
     if (pendingCaptures.length === 0) {
         for(let r=0; r<10; r++) for(let c=0; c<10; c++) {
             const p = board[r][c];
-            if(p && p.startsWith(player)) { const m = calculateMaxCaptures(board, r, c, p, []); if(m > globalMax) globalMax = m; }
+            if(p && typeof p === 'string' && p.startsWith(player)) { // POPRAWKA
+                 const m = calculateMaxCaptures(board, r, c, p, []); 
+                 if(m > globalMax) globalMax = m; 
+            }
         }
     }
+
     if (globalMax === 0 && pendingCaptures.length === 0) {
         const simpleMoves = [];
         const piece = board[row][col];
-        if (!piece) return [];
+        if (!piece || piece === 0) return []; // POPRAWKA
         const isKing = piece.includes('king');
         const directions = isKing ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] : (player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]]);
         directions.forEach(([dr, dc]) => {
@@ -100,8 +107,10 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
         });
         return simpleMoves;
     }
+    
     const myMax = calculateMaxCaptures(board, row, col, movingPiece, pendingCaptures);
     if (pendingCaptures.length === 0 && myMax < globalMax) return [];
+    
     const captureMoves = getPossibleCaptures(board, row, col, movingPiece, pendingCaptures);
     const movesWithDepth = captureMoves.map(([tR, tC]) => {
          const cap = findCapturedPieceBetween(board, row, col, tR, tC);
@@ -109,36 +118,50 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
          if(cap) newPending.push(cap);
          return { toRow: tR, toCol: tC, isCapture: true, totalVal: 1 + calculateMaxCaptures(board, tR, tC, movingPiece, newPending) };
     });
+    
+    if (movesWithDepth.length === 0) return []; // Zabezpieczenie
     const best = Math.max(...movesWithDepth.map(m => m.totalVal));
     return movesWithDepth.filter(m => m.totalVal === best);
 }
+
+// --- TO BYŁO ŹRÓDŁEM BŁĘDU W TWOJEJ KONSOLI ---
 export function canPlayerMove(board, player) {
-    for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) if (board[r][c]?.startsWith(player) && getValidMoves(board, r, c, player, []).length > 0) return true;
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 10; c++) {
+            const piece = board[r][c];
+            // POPRAWKA: Sprawdzamy piece !== 0 oraz typ string
+            if (piece !== 0 && typeof piece === 'string' && piece.startsWith(player)) {
+                 if (getValidMoves(board, r, c, player, []).length > 0) return true;
+            }
+        }
+    }
     return false; 
 }
-export function checkGameState(board, currentPlayer) { return !canPlayerMove(board, currentPlayer) ? (currentPlayer === 'white' ? 'black' : 'white') : null; }
 
-// NOWA FUNKCJA DLA AI:
+export function checkGameState(board, currentPlayer) { 
+    return !canPlayerMove(board, currentPlayer) ? (currentPlayer === 'white' ? 'black' : 'white') : null; 
+}
+
 export function getAllMovesForPlayer(board, player) {
     const allMoves = [];
     let globalMaxCapture = 0;
 
-    // Krok 1: Ustalenie priorytetu bicia (czy jest jakiekolwiek bicie na planszy?)
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 10; c++) {
             const p = board[r][c];
-            if (p && p.startsWith(player)) {
+            // POPRAWKA: Bezpieczne sprawdzenie typu
+            if (p && typeof p === 'string' && p.startsWith(player)) {
                 const max = calculateMaxCaptures(board, r, c, p, []);
                 if (max > globalMaxCapture) globalMaxCapture = max;
             }
         }
     }
 
-    // Krok 2: Pobranie wszystkich legalnych ruchów
     for (let r = 0; r < 10; r++) {
         for (let c = 0; c < 10; c++) {
             const p = board[r][c];
-            if (p && p.startsWith(player)) {
+            // POPRAWKA: Bezpieczne sprawdzenie typu
+            if (p && typeof p === 'string' && p.startsWith(player)) {
                 const moves = getValidMoves(board, r, c, player, []);
                 moves.forEach(m => {
                     allMoves.push({
