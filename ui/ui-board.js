@@ -1,3 +1,5 @@
+import { moveHistory } from '../core/moveHistory.js';
+
 let selectedSquare = null;
 let validMovesForSelected = [];
 
@@ -21,15 +23,12 @@ function initUI() {
   renderBoard();
 }
 
-// Wyświetl informację o obecnym graczu na ruchu
 function updateCurrentPlayerDisplay() {
   const statusDiv = document.getElementById('status');
   statusDiv.textContent = `Na ruchu: ${board.currentPlayer}`;
 }
 
-// Obsługa kliknięcia w pole
 function onSquareClick(row, col) {
-  // Jeśli kliknięto na pionek aktualnego gracza
   if (
     board.grid[row][col] &&
     board.grid[row][col][0] === board.currentPlayer[0]
@@ -38,7 +37,6 @@ function onSquareClick(row, col) {
     validMovesForSelected = getValidMovesForPiece(row, col);
     highlightValidMoves(validMovesForSelected);
   } else if (selectedSquare) {
-    // Sprawdzamy, czy kliknięte pole jest wśród podświetlonych (legalnych ruchów)
     if (
       validMovesForSelected.some(
         (mv) => mv.toRow === row && mv.toCol === col
@@ -51,7 +49,6 @@ function onSquareClick(row, col) {
       updateCurrentPlayerDisplay();
       renderBoard();
     } else {
-      // Kliknięcie poza legalne ruchy - czyścimy wybór
       selectedSquare = null;
       validMovesForSelected = [];
       clearHighlights();
@@ -63,7 +60,6 @@ function getValidMovesForPiece(row, col) {
   const player = board.currentPlayer;
   const moves = [];
 
-  // Sprawdź ruchy proste o 1 pole diagonalnie
   const directions = player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
   directions.forEach(([dr, dc]) => {
     const nr = row + dr;
@@ -73,7 +69,6 @@ function getValidMovesForPiece(row, col) {
     }
   });
 
-  // Sprawdź ruchy bicia
   const captureMoves = getPossibleCaptures(board.grid, row, col, player);
   captureMoves.forEach(([nr, nc]) => {
     moves.push({ toRow: nr, toCol: nc });
@@ -100,20 +95,29 @@ function clearHighlights() {
   });
 }
 
-// Przykładowa funkcja wykonywania ruchu (aktualizuje stan planszy)
 function makeMove(fromRow, fromCol, toRow, toCol) {
+  const previousBoard = JSON.parse(JSON.stringify(board.grid));
+  const previousPlayer = board.currentPlayer;
+
   board.grid[toRow][toCol] = board.grid[fromRow][fromCol];
   board.grid[fromRow][fromCol] = 0;
 
-  // Sprawdzenie i usunięcie zbitego pionka (dla ruchu bicia)
   if (Math.abs(toRow - fromRow) === 2) {
     const capRow = (fromRow + toRow) / 2;
     const capCol = (fromCol + toCol) / 2;
     board.grid[capRow][capCol] = 0;
   }
 
-  // Zmiana gracza na ruchu
   board.currentPlayer = board.currentPlayer === 'white' ? 'black' : 'white';
+
+  moveHistory.addMove({
+    fromRow,
+    fromCol,
+    toRow,
+    toCol,
+    previousBoard,
+    previousPlayer,
+  });
 }
 
-export { initUI };
+export { initUI, makeMove };

@@ -1,18 +1,32 @@
-// Wyświetlanie oceny ruchu w panelu statusu
+import { moveHistory } from '../core/moveHistory.js';
 
-import { evaluateBoard } from '../core/eval.js';
+function initControls() {
+  const controlsDiv = document.getElementById('controls');
+  controlsDiv.innerHTML = '';
 
-function updateMoveQualityMessage(board, player) {
-  const statusDiv = document.getElementById('status');
-  const score = evaluateBoard(board.grid, player);
+  const undoBtn = document.createElement('button');
+  undoBtn.textContent = 'Cofnij ruch';
+  undoBtn.onclick = () => {
+    const lastMove = moveHistory.undoMove();
+    if (lastMove) {
+      // Przywróć stan planszy - uproszczony przykład
+      board.grid = lastMove.previousBoard;
+      board.currentPlayer = lastMove.previousPlayer;
+      updateCurrentPlayerDisplay();
+      renderBoard();
+    }
+  };
+  controlsDiv.appendChild(undoBtn);
 
-  let message = 'Ocena ruchu: ';
-  if (score > 1) message += 'Bardzo dobry ruch';
-  else if (score > 0) message += 'Dobry ruch';
-  else if (score === 0) message += 'Neutralny ruch';
-  else message += 'Zły ruch';
-
-  statusDiv.textContent = `Na ruchu: ${player} | ${message}`;
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'Restartuj grę';
+  resetBtn.onclick = () => {
+    moveHistory.clear();
+    board = new Board();
+    updateCurrentPlayerDisplay();
+    renderBoard();
+  };
+  controlsDiv.appendChild(resetBtn);
 }
 
-export { updateMoveQualityMessage };
+export { initControls };
