@@ -6,10 +6,9 @@ import { isValidMove, getPossibleCapturesForPiece, hasAnyCapture } from '../core
 let selectedSquare = null;
 let validMovesForSelected = [];
 let pieceLockedForCapture = false; 
-
-// Tablica przechowująca współrzędne pionków zbitych w bieżącej sekwencji
 let pendingCaptures = []; 
 
+// ... (zachowaj initUI i updateCurrentPlayerDisplay bez zmian) ...
 export function initUI() {
   const boardDiv = document.getElementById('board');
   if (!boardDiv) return;
@@ -43,7 +42,7 @@ export function renderBoard() {
       const square = document.querySelector(`#board .square[data-row='${r}'][data-col='${c}']`);
       if (!square) continue;
       square.innerHTML = '';
-      square.classList.remove('highlight'); // Czyścimy stare podświetlenia przy renderowaniu
+      square.classList.remove('highlight');
       
       const pieceCode = gameState.grid[r][c]; 
       if (pieceCode !== 0) {
@@ -55,47 +54,40 @@ export function renderBoard() {
              if (pieceCode.includes('king')) pieceDiv.classList.add('king');
         }
         
-        // Jeśli pionek jest na liście "do usunięcia" (już przeskoczony), oznacz go wizualnie (opcjonalne)
+        // Duchy zbitych pionków
         if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) {
-            pieceDiv.style.opacity = '0.5'; // Przeskoczony pionek jest "duchem"
+            pieceDiv.style.opacity = '0.5'; 
         }
 
         square.appendChild(pieceDiv);
       }
     }
   }
-  
-  // Ponowne nałożenie podświetleń, jeśli są jakieś aktywne
   highlightValidMoves(validMovesForSelected);
 }
 
+// ... (onSquareClick i getValidMovesForPiece bez zmian) ...
 function onSquareClick(row, col) {
   if (pieceLockedForCapture) {
       if (selectedSquare.row === row && selectedSquare.col === col) return;
-      
       const move = validMovesForSelected.find(m => m.toRow === row && m.toCol === col);
-      if (move) {
-          makeMove(selectedSquare.row, selectedSquare.col, row, col, true);
-      } else {
-          console.log("Musisz dokończyć bicie tym pionkiem!");
-      }
+      if (move) makeMove(selectedSquare.row, selectedSquare.col, row, col, true);
+      else console.log("Musisz dokończyć bicie!");
       return;
   }
 
   const piece = gameState.grid[row][col];
-  // Nie można wybrać pionka, który już został "przeskoczony" w tej turze (jest w pendingCaptures)
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
 
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     selectedSquare = { row, col };
     validMovesForSelected = getValidMovesForPiece(row, col);
-    renderBoard(); // Odśwież, by usunąć stare podświetlenia
+    renderBoard(); 
   } 
   else if (selectedSquare) {
     const move = validMovesForSelected.find((m) => m.toRow === row && m.toCol === col);
-    if (move) {
-      makeMove(selectedSquare.row, selectedSquare.col, row, col, move.isCapture);
-    } else {
+    if (move) makeMove(selectedSquare.row, selectedSquare.col, row, col, move.isCapture);
+    else {
       selectedSquare = null;
       validMovesForSelected = [];
       renderBoard();
@@ -106,77 +98,116 @@ function onSquareClick(row, col) {
 function getValidMovesForPiece(row, col) {
   const player = gameState.currentPlayer;
   const mandatoryCapture = hasAnyCapture(gameState.grid, player);
-  const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col, pendingCaptures); // Przekazujemy pendingCaptures!
+  const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col, pendingCaptures);
   
   if (mandatoryCapture) {
-    if (captureMoves.length > 0) {
-        return captureMoves.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
-    } else {
-        return [];
-    }
+    return captureMoves.length > 0 ? captureMoves.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true })) : [];
   } else {
+    // Jeśli nie ma przymusu, sprawdź zwykłe ruchy (isValidMove obsługuje teraz damki)
     const simpleMoves = [];
-    const directions = player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
-    directions.forEach(([dr, dc]) => {
-      const nr = row + dr;
-      const nc = col + dc;
-      if (isValidMove(gameState.grid, row, col, nr, nc, player)) {
-        simpleMoves.push({ toRow: nr, toCol: nc, isCapture: false });
-      }
-    });
+    // Dla damki musimy sprawdzić wszystkie 4 przekątne do końca
+    // Uproszczenie: sprawdzamy każde pole na planszy (mało wydajne, ale pewne dla początkujących)
+    // Lepsza wersja: Skanowanie po przekątnych od (row, col)
+    
+    const piece = gameState.grid[row][col];
+    const isKing = piece.includes('king');
+    
+    if (isKing) {
+        // Skanuj 4 kierunki
+        const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+        directions.forEach(([dr, dc]) => {
+            let r = row + dr;
+            let c = col + dc;
+            while (r >= 0 && r < 10 && c >= 0 && c < 10) {
+                if (isValidMove(gameState.grid, row, col, r, c, player)) {
+                    simpleMoves.push({ toRow: r, toCol: c, isCapture: false });
+                } else {
+                    break; // Jeśli napotkasz przeszkodę, dalej nie sprawdzaj
+                }
+                r += dr;
+                c += dc;
+            }
+        });
+    } else {
+        // Zwykły pionek
+        const directions = player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+        directions.forEach(([dr, dc]) => {
+           if (isValidMove(gameState.grid, row, col, row+dr, col+dc, player)) {
+               simpleMoves.push({ toRow: row+dr, toCol: col+dc, isCapture: false });
+           }
+        });
+    }
     return simpleMoves;
   }
+}
+
+// --- Helper do znajdowania zbitego pionka przy "latającym" biciu damką ---
+function findCapturedPieceBetween(r1, c1, r2, c2) {
+    const dr = Math.sign(r2 - r1);
+    const dc = Math.sign(c2 - c1);
+    let r = r1 + dr;
+    let c = c1 + dc;
+    while (r !== r2) {
+        if (gameState.grid[r][c] !== 0) return { r, c };
+        r += dr;
+        c += dc;
+    }
+    return null;
 }
 
 export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   const previousBoard = JSON.parse(JSON.stringify(gameState.grid));
   const previousPlayer = gameState.currentPlayer;
 
-  // Przesuń pionka
+  // Przesuń (jeśli to damka, to zachowuje status damki)
   gameState.grid[toRow][toCol] = gameState.grid[fromRow][fromCol];
   gameState.grid[fromRow][fromCol] = 0;
 
   let moreCapturesAvailable = false;
 
   if (isCapture) {
-    // Znajdź pozycję zbitego pionka
-    const capRow = (fromRow + toRow) / 2;
-    const capCol = (fromCol + toCol) / 2;
-    
-    // Zamiast usuwać, dodaj do listy oczekujących na usunięcie
-    pendingCaptures.push({ r: capRow, c: capCol });
+    // Znajdź zbitego pionka (dla damki może być gdzieś pomiędzy)
+    const captured = findCapturedPieceBetween(fromRow, fromCol, toRow, toCol);
+    if (captured) {
+        pendingCaptures.push(captured);
+    }
 
-    // Sprawdź, czy są dalsze bicia z nowej pozycji
-    // WAŻNE: Musimy przekazać pendingCaptures do reguł, aby nie można było przeskoczyć tego samego!
     const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
-    
     if (nextCaptures.length > 0) {
       moreCapturesAvailable = true;
       pieceLockedForCapture = true;
       selectedSquare = { row: toRow, col: toCol };
       validMovesForSelected = nextCaptures.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
-      
       renderBoard(); 
-      return; // Kontynuuj turę
+      return;
     }
   }
 
-  // Jeśli koniec sekwencji bicia (lub zwykły ruch)
+  // Koniec tury
   if (!moreCapturesAvailable) {
-      // TERAZ faktycznie usuń wszystkie zbite pionki z planszy
-      pendingCaptures.forEach(cap => {
-          gameState.grid[cap.r][cap.c] = 0;
-      });
-      pendingCaptures = []; // Wyczyść listę
+      // Usuń zbite
+      pendingCaptures.forEach(cap => { gameState.grid[cap.r][cap.c] = 0; });
+      pendingCaptures = [];
 
-      // Zmień gracza
+      // --- PROMOCJA NA DAMKĘ ---
+      // Sprawdzamy czy pionek stanął na końcu planszy
+      const piece = gameState.grid[toRow][toCol];
+      if (piece && !piece.includes('king')) {
+          if (gameState.currentPlayer === 'white' && toRow === 0) {
+              gameState.grid[toRow][toCol] = 'white_king';
+          }
+          if (gameState.currentPlayer === 'black' && toRow === 9) {
+              gameState.grid[toRow][toCol] = 'black_king';
+          }
+      }
+
+      // Zmiana gracza
       gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
       pieceLockedForCapture = false;
       selectedSquare = null;
       validMovesForSelected = [];
       
       moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
-      
       updateCurrentPlayerDisplay();
       renderBoard();
   }
