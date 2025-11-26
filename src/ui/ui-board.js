@@ -67,6 +67,8 @@ export function renderBoard() {
       let currentNum = isDark ? squareNumber++ : null;
 
       if (!square) continue; 
+      
+      // Resetuj zawartość
       square.innerHTML = '';
       square.classList.remove('highlight');
       
@@ -93,16 +95,15 @@ export function renderBoard() {
       }
     }
   }
+  
   highlightValidMoves(validMovesForSelected);
-  try { updateBoardStateDisplay(); } catch (e) { console.warn(e); }
+  try { updateBoardStateDisplay(); } catch(e) { console.warn("Panel boczny error:", e); }
 }
 
 function updateBoardStateDisplay() {
     const outputDiv = document.getElementById('board-state-output');
     if (!outputDiv) return;
-    // ... (logika generowania opisu bez zmian) ...
-    // Aby zaoszczędzić miejsce w odpowiedzi, skopiuj logikę updateBoardStateDisplay z poprzednich wersji
-    // lub zaimplementuj ją prosto jak wcześniej.
+
     const whitePieces = [], whiteKings = [], blackPieces = [], blackKings = [];
     let sNum = 1;
     for (let r = 0; r < 10; r++) {
@@ -117,7 +118,17 @@ function updateBoardStateDisplay() {
             }
         }
     }
-    outputDiv.textContent = `Current: ${gameState.currentPlayer}\nW: ${whitePieces}\nWK: ${whiteKings}\nB: ${blackPieces}\nBK: ${blackKings}`;
+    outputDiv.textContent = `Current Player: ${gameState.currentPlayer.toUpperCase()}
+
+WHITE:
+- Men: [${whitePieces.join(', ')}]
+- Kings: [${whiteKings.join(', ')}]
+
+BLACK:
+- Men: [${blackPieces.join(', ')}]
+- Kings: [${blackKings.join(', ')}]
+
+Total: ${whitePieces.length + whiteKings.length + blackPieces.length + blackKings.length}`;
 }
 
 function onSquareClick(row, col) {
@@ -128,21 +139,22 @@ function onSquareClick(row, col) {
       }
       return;
   }
+
   if (pieceLockedForCapture) {
       if (selectedSquare.row === row && selectedSquare.col === col) return;
       const move = validMovesForSelected.find(m => m.toRow === row && m.toCol === col);
       if (move) makeMove(selectedSquare.row, selectedSquare.col, row, col, true);
       return;
   }
+
   const piece = gameState.grid[row][col];
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
+
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     const moves = getValidMovesForPiece(row, col);
-    if (moves.length > 0) { // Pozwól zaznaczyć tylko jeśli ma ruchy (opcjonalne, ale dobre UX)
-        selectedSquare = { row, col };
-        validMovesForSelected = moves;
-        renderBoard();
-    }
+    selectedSquare = { row, col };
+    validMovesForSelected = moves;
+    renderBoard(); 
   } 
   else if (selectedSquare) {
     const move = validMovesForSelected.find((m) => m.toRow === row && m.toCol === col);
@@ -155,12 +167,10 @@ function onSquareClick(row, col) {
   }
 }
 
-// KLUCZOWA ZMIANA: Filtrowanie ruchów (Zasada Większości)
 export function getValidMovesForPiece(row, col) {
     const player = gameState.currentPlayer;
-    
-    // 1. Oblicz globalny max bić na planszy (jeśli nie jesteśmy w trakcie sekwencji)
     let globalMax = 0;
+
     if (pendingCaptures.length === 0) {
         for(let r=0; r<10; r++) {
             for(let c=0; c<10; c++) {
@@ -172,11 +182,9 @@ export function getValidMovesForPiece(row, col) {
             }
         }
     } else {
-        // W trakcie sekwencji nie obchodzą nas inne pionki
         globalMax = 0; 
     }
 
-    // 2. Jeśli globalnie nie ma bić, zwróć zwykłe ruchy (jeśli pionek nie jest zablokowany sekwencją)
     if (globalMax === 0 && pendingCaptures.length === 0) {
         const simpleMoves = [];
         const piece = gameState.grid[row][col];
@@ -198,27 +206,20 @@ export function getValidMovesForPiece(row, col) {
         return simpleMoves;
     }
 
-    // 3. Są bicia (albo globalne, albo kontynuacja). Sprawdź ten pionek.
     const myMaxCaptures = calculateMaxCaptures(gameState.grid, row, col, pendingCaptures);
     
-    // Jeśli to początek tury i ten pionek ma mniej bić niż najlepszy -> brak ruchów
-    if (pendingCaptures.length === 0 && myMaxCaptures < globalMax) {
-        return [];
-    }
+    if (pendingCaptures.length === 0 && myMaxCaptures < globalMax) return [];
 
-    // 4. Zwróć tylko te ruchy, które prowadzą do max wyniku (dla tego pionka)
     const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col, pendingCaptures);
     const movesWithDepth = captureMoves.map(move => {
          const [toR, toC] = move;
          const captured = findCapturedPieceBetween(gameState.grid, row, col, toR, toC);
          const newPending = [...pendingCaptures];
          if(captured) newPending.push(captured);
-         
          const further = calculateMaxCaptures(gameState.grid, toR, toC, newPending);
          return { toRow: toR, toCol: toC, isCapture: true, totalVal: 1 + further };
     });
 
-    // Filtruj: zostaw tylko te z max totalVal
     if (movesWithDepth.length === 0) return [];
     const myBestPath = Math.max(...movesWithDepth.map(m => m.totalVal));
     return movesWithDepth.filter(m => m.totalVal === myBestPath);
@@ -239,9 +240,7 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
 
     const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
     if (nextCaptures.length > 0) {
-      // Sprawdź czy faktycznie te bicia są dozwolone (czyli czy calculateMax > 0)
-      // Wystarczy sprawdzić czy getValidMoves zwraca coś
-      const validNext = getValidMovesForPiece(toRow, toCol); // To użyje nowej logiki filtrowania!
+      const validNext = getValidMovesForPiece(toRow, toCol);
       if (validNext.length > 0) {
           moreCapturesAvailable = true;
           pieceLockedForCapture = true;
@@ -271,4 +270,11 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
   updateCurrentPlayerDisplay();
   renderBoard();
+}
+
+function highlightValidMoves(moves) {
+  moves.forEach(({ toRow, toCol }) => {
+    const square = document.querySelector(`#board .square[data-row='${toRow}'][data-col='${toCol}']`);
+    if (square) square.classList.add('highlight');
+  });
 }

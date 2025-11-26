@@ -1,25 +1,17 @@
-// src/main.js
 import { initGame } from './core/gameState.js';
 import { initUI } from './ui/ui-board.js';
 import { initControls } from './ui/ui-controls.js';
-
-// Zmiana ścieżki (kropka zamiast dwóch kropek)
-import { runTests } from './tests/testRunner.js'; 
+import { runTests } from './tests/testRunner.js';
 import { gameTests } from './tests/gameTests.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-  initGame();
-  initUI();
-  initControls();
+  console.log("Inicjalizacja aplikacji...");
+  
+  initGame();     // Resetuje stan gry
+  initUI();       // Rysuje planszę
+  initControls(); // Rysuje przyciski (Restart, Cofnij, Edytor)
 
-  // Przycisk testów
-  const controls = document.getElementById('controls');
-  if (controls) {
-      const testBtn = document.createElement('button');
-      testBtn.textContent = "Uruchom Testy";
-      testBtn.style.backgroundColor = "#e74c3c";
-      testBtn.style.marginLeft = "10px";
-      testBtn.onclick = () => runTests(gameTests);
-      controls.appendChild(testBtn);
-  }
+  // Opcjonalnie: Dodatkowy przycisk testów w konsoli lub UI
+  // (W ui-controls.js dodaliśmy już przyciski, ale testy można wywołać ręcznie)
+  window.runGameTests = () => runTests(gameTests);
 });

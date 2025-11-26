@@ -44,8 +44,8 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
       if (Math.abs(dr) === 2) {
           const midRow = fromRow + dr / 2;
           const midCol = fromCol + dc / 2;
-          const jumpedPiece = board[midRow][midCol];
-          return isOpponent(piece, jumpedPiece);
+          const midPiece = board[midRow][midCol];
+          return isOpponent(piece, midPiece);
       }
   } else {
       return isPathClear(board, fromRow, fromCol, toRow, toCol);
@@ -53,6 +53,7 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
   return false;
 }
 
+// Zwraca listę możliwych SKOKÓW (bicia) - bez rekurencji, tylko 1 krok
 export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = []) {
   const piece = board[row][col];
   if (!piece) return [];
@@ -116,7 +117,6 @@ export function hasAnyCapture(board, player) {
   return false;
 }
 
-// Helper: Znajdź pionka między dwoma polami (logika uniwersalna)
 export function findCapturedPieceBetween(board, r1, c1, r2, c2) {
     const dr = Math.sign(r2 - r1);
     const dc = Math.sign(c2 - c1);
@@ -131,7 +131,6 @@ export function findCapturedPieceBetween(board, r1, c1, r2, c2) {
     return null;
 }
 
-// NOWE: Rekurencyjne liczenie maksymalnej liczby bić z danej pozycji
 export function calculateMaxCaptures(board, row, col, pendingCaptures = []) {
     const possibleMoves = getPossibleCapturesForPiece(board, row, col, pendingCaptures);
     if (possibleMoves.length === 0) return 0;

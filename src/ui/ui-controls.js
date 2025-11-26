@@ -2,18 +2,25 @@
 import { gameState, initGame, clearBoard } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
 import { renderBoard, updateCurrentPlayerDisplay, initUI } from './ui-board.js';
+import { runTests } from '../tests/testRunner.js';
+import { gameTests } from '../tests/gameTests.js';
 
 export function initControls() {
   const controlsDiv = document.getElementById('controls');
   if (!controlsDiv) return;
   controlsDiv.innerHTML = '';
 
-  // --- Sekcja Gry ---
+  // --- Kontener główny dla przycisków ---
   const gameControls = document.createElement('div');
   gameControls.id = 'game-controls';
+  gameControls.style.display = 'flex';
+  gameControls.style.gap = '10px';
+  gameControls.style.flexWrap = 'wrap';
+  gameControls.style.justifyContent = 'center';
   
+  // 1. Cofnij
   const undoBtn = document.createElement('button');
-  undoBtn.textContent = 'Cofnij ruch';
+  undoBtn.textContent = 'Cofnij';
   undoBtn.onclick = () => {
     const lastMove = moveHistory.undoMove();
     if (lastMove) {
@@ -24,39 +31,52 @@ export function initControls() {
     }
   };
 
+  // 2. Restart
   const resetBtn = document.createElement('button');
-  resetBtn.textContent = 'Restartuj grę';
+  resetBtn.textContent = 'Restart';
+  resetBtn.style.backgroundColor = '#e67e22';
   resetBtn.onclick = () => {
     moveHistory.clear();
     initGame();
     initUI();
   };
 
+  // 3. Tryb Edycji
   const editorToggleBtn = document.createElement('button');
-  editorToggleBtn.textContent = '🔧 Tryb Edycji';
+  editorToggleBtn.textContent = '🔧 Edytor';
   editorToggleBtn.style.backgroundColor = '#f39c12';
   editorToggleBtn.onclick = () => toggleEditorMode(true);
 
-  gameControls.append(undoBtn, resetBtn, editorToggleBtn);
+  // 4. Testy (dodajemy przycisk tutaj, żeby był dostępny)
+  const testBtn = document.createElement('button');
+  testBtn.textContent = '🧪 Testy';
+  testBtn.style.backgroundColor = '#9b59b6';
+  testBtn.onclick = () => {
+      console.clear();
+      runTests(gameTests);
+  };
+
+  gameControls.append(undoBtn, resetBtn, editorToggleBtn, testBtn);
   controlsDiv.appendChild(gameControls);
 
 
-  // --- Sekcja Edytora ---
+  // --- Panel Edytora (domyślnie ukryty) ---
   const editorControls = document.createElement('div');
   editorControls.id = 'editor-controls';
   editorControls.style.display = 'none';
-  editorControls.style.flexDirection = 'column'; // Zmiana na kolumnę dla lepszego układu
+  editorControls.style.flexDirection = 'column';
   editorControls.style.gap = '10px';
   editorControls.style.marginTop = '10px';
   editorControls.style.padding = '10px';
   editorControls.style.background = 'rgba(0,0,0,0.2)';
   editorControls.style.borderRadius = '8px';
 
-  // 1. Narzędzia (Pionki)
+  // Narzędzia
   const toolsContainer = document.createElement('div');
   toolsContainer.style.display = 'flex';
   toolsContainer.style.gap = '5px';
   toolsContainer.style.flexWrap = 'wrap';
+  toolsContainer.style.justifyContent = 'center';
 
   const tools = [
       { name: 'Biały', value: 'white', color: '#fff', textColor: '#000' },
@@ -71,52 +91,48 @@ export function initControls() {
       btn.textContent = tool.name;
       btn.style.backgroundColor = tool.color;
       btn.style.color = tool.textColor;
-      btn.style.border = '2px solid transparent';
+      btn.style.padding = '5px 10px';
+      btn.style.fontSize = '0.9rem';
       btn.onclick = () => {
           gameState.selectedEditorPiece = tool.value;
-          toolsContainer.querySelectorAll('button').forEach(b => b.style.borderColor = 'transparent');
-          btn.style.borderColor = '#3498db'; 
+          toolsContainer.querySelectorAll('button').forEach(b => b.style.border = 'none');
+          btn.style.border = '2px solid #3498db'; 
       };
       toolsContainer.appendChild(btn);
   });
   editorControls.appendChild(toolsContainer);
 
-  // 2. Ustawienia stanu (NOWE: Wybór gracza na ruchu)
+  // Opcje Edytora
   const settingsContainer = document.createElement('div');
   settingsContainer.style.display = 'flex';
   settingsContainer.style.gap = '10px';
-  settingsContainer.style.alignItems = 'center';
+  settingsContainer.style.justifyContent = 'center';
 
-  // Przełącznik gracza
   const playerToggleBtn = document.createElement('button');
   playerToggleBtn.id = 'editor-player-toggle';
-  playerToggleBtn.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
+  playerToggleBtn.textContent = `Ruch: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
   playerToggleBtn.style.backgroundColor = '#8e44ad';
   playerToggleBtn.onclick = () => {
-      // Zmień gracza w gameState
       gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
-      // Zaktualizuj napis na przycisku
-      playerToggleBtn.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
-      // Zaktualizuj też główny wyświetlacz
+      playerToggleBtn.textContent = `Ruch: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
       updateCurrentPlayerDisplay();
+      renderBoard(); // Odśwież panel boczny
   };
-  settingsContainer.appendChild(playerToggleBtn);
 
   const clearBtn = document.createElement('button');
   clearBtn.textContent = '🗑️ Wyczyść';
+  clearBtn.style.backgroundColor = '#c0392b';
   clearBtn.onclick = () => {
       clearBoard();
       renderBoard();
   };
-  settingsContainer.appendChild(clearBtn);
 
+  settingsContainer.append(playerToggleBtn, clearBtn);
   editorControls.appendChild(settingsContainer);
 
-  // 3. Wyjście
   const playBtn = document.createElement('button');
-  playBtn.textContent = '▶️ Graj (Zatwierdź)';
+  playBtn.textContent = '▶️ Graj (Wyjdź)';
   playBtn.style.backgroundColor = '#2ecc71';
-  playBtn.style.marginTop = '5px';
   playBtn.onclick = () => toggleEditorMode(false);
   editorControls.appendChild(playBtn);
 
@@ -134,15 +150,13 @@ function toggleEditorMode(enable) {
         editorCtrls.style.display = 'flex';
         statusDiv.textContent = "TRYB EDYCJI";
         statusDiv.style.color = '#f39c12';
-        
-        // Odśwież przycisk gracza przy wejściu, by zgadzał się ze stanem
         const playerBtn = document.getElementById('editor-player-toggle');
-        if(playerBtn) playerBtn.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
-
+        if(playerBtn) playerBtn.textContent = `Ruch: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
     } else {
         gameCtrls.style.display = 'flex';
         editorCtrls.style.display = 'none';
         updateCurrentPlayerDisplay();
         statusDiv.style.color = 'white';
+        renderBoard(); // Odśwież, by przeliczyć ruchy
     }
 }
