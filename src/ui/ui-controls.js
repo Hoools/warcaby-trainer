@@ -1,70 +1,53 @@
-import { selectBestMove } from '../core/ai.js';
+// src/ui/ui-controls.js
+import { gameState, initGame } from '../core/gameState.js';
+import { moveHistory } from '../core/moveHistory.js';
+import { renderBoard, updateCurrentPlayerDisplay, initUI } from './ui-board.js';
 
-let aiEnabled = false;
-let aiPlayer = 'black'; // domyślnie AI gra czarnymi
-let aiDepth = 3;
-
-function initControls() {
+export function initControls() {
   const controlsDiv = document.getElementById('controls');
+  if (!controlsDiv) return;
   controlsDiv.innerHTML = '';
 
+  // Przycisk Cofnij
   const undoBtn = document.createElement('button');
   undoBtn.textContent = 'Cofnij ruch';
   undoBtn.onclick = () => {
     const lastMove = moveHistory.undoMove();
     if (lastMove) {
-      board.grid = lastMove.previousBoard;
-      board.currentPlayer = lastMove.previousPlayer;
+      // Przywróć stan planszy z historii
+      gameState.grid = JSON.parse(JSON.stringify(lastMove.previousBoard));
+      gameState.currentPlayer = lastMove.previousPlayer;
+      
+      // Odśwież UI
       updateCurrentPlayerDisplay();
       renderBoard();
-      updateBestMovesPanel();
+      // Wyczyść ewentualne komunikaty/podświetlenia w panelu (jeśli będą)
+      updateBestMovesPanel(); 
     }
   };
   controlsDiv.appendChild(undoBtn);
 
+  // Przycisk Restart
   const resetBtn = document.createElement('button');
   resetBtn.textContent = 'Restartuj grę';
   resetBtn.onclick = () => {
     moveHistory.clear();
-    board = new Board();
+    initGame(); // Resetuje dane w gameState
+    initUI();   // Rysuje planszę od nowa
     updateCurrentPlayerDisplay();
-    renderBoard();
     updateBestMovesPanel();
   };
   controlsDiv.appendChild(resetBtn);
 
-  const aiToggle = document.createElement('button');
-  aiToggle.textContent = 'Włącz/Wyłącz AI';
-  aiToggle.onclick = () => {
-    aiEnabled = !aiEnabled;
-    aiToggle.textContent = aiEnabled ? 'Wyłącz AI' : 'Włącz AI';
-    if (aiEnabled && board.currentPlayer === aiPlayer) {
-      makeAIMove();
-    }
-  };
-  controlsDiv.appendChild(aiToggle);
-
-  updateBestMovesPanel();
+  // Kontener na najlepsze ruchy (na przyszłość)
+  const bestMovesDiv = document.createElement('div');
+  bestMovesDiv.id = 'bestMoves';
+  bestMovesDiv.style.marginTop = '10px';
+  controlsDiv.appendChild(bestMovesDiv);
 }
 
-async function makeAIMove() {
-  if (!aiEnabled) return;
-  if (board.currentPlayer !== aiPlayer) return;
-
-  // Można dodać pewne opóźnienie wizualne
-  const move = selectBestMove(board.grid, board.currentPlayer, aiDepth);
-  if (move) {
-    makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
-    updateCurrentPlayerDisplay();
-    renderBoard();
-    updateBestMovesPanel();
-
-    // Jeśli po ruchu AI jest ponowna tura AI (np. wielokrotne bicie)
-    if (board.currentPlayer === aiPlayer) {
-      await new Promise(r => setTimeout(r, 500));
-      makeAIMove();
-    }
-  }
+export function updateBestMovesPanel() {
+    const bestMovesDiv = document.getElementById('bestMoves');
+    if(bestMovesDiv) bestMovesDiv.innerHTML = ''; 
+    // Tu w przyszłości wepniemy logikę AI/podpowiedzi
 }
-
-export { initControls, makeAIMove };
