@@ -7,6 +7,9 @@ let selectedSquare = null;
 let validMovesForSelected = [];
 let pieceLockedForCapture = false; 
 
+// Tablica przechowująca współrzędne pionków zbitych w bieżącej sekwencji
+let pendingCaptures = []; 
+
 export function initUI() {
   const boardDiv = document.getElementById('board');
   if (!boardDiv) return;
@@ -29,7 +32,6 @@ export function initUI() {
 export function updateCurrentPlayerDisplay() {
   const statusDiv = document.getElementById('status');
   if (statusDiv) {
-      // Tłumaczenie na polski dla UI
       const plName = gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne';
       statusDiv.textContent = `Na ruchu: ${plName}`;
   }
@@ -40,44 +42,37 @@ export function renderBoard() {
     for (let c = 0; c < 10; c++) {
       const square = document.querySelector(`#board .square[data-row='${r}'][data-col='${c}']`);
       if (!square) continue;
-
-      // Wyczyść zawartość
       square.innerHTML = '';
+      square.classList.remove('highlight'); // Czyścimy stare podświetlenia przy renderowaniu
       
-      const pieceCode = gameState.grid[r][c]; // np. 'white', 'black', 'white_king'
-      if (pieceCode) {
+      const pieceCode = gameState.grid[r][c]; 
+      if (pieceCode !== 0) {
         const pieceDiv = document.createElement('div');
         pieceDiv.classList.add('piece');
+        if (typeof pieceCode === 'string') {
+             if (pieceCode.includes('white')) pieceDiv.classList.add('white');
+             if (pieceCode.includes('black')) pieceDiv.classList.add('black');
+             if (pieceCode.includes('king')) pieceDiv.classList.add('king');
+        }
         
-        // Rozpoznawanie koloru
-        if (pieceCode.includes('white')) pieceDiv.classList.add('white');
-        if (pieceCode.includes('black')) pieceDiv.classList.add('black');
-        
-        // Rozpoznawanie damki (king) - opcjonalnie na przyszłość
-        if (pieceCode.includes('king') || pieceCode === pieceCode.toUpperCase() && pieceCode.length === 1) { 
-             // (Dla uproszczonego modelu 'W'/'B' vs 'w'/'b' z poprzednich kroków)
-             // Ale w gameState mamy 'white'/'black'. Dodamy klasę king w przyszłości.
+        // Jeśli pionek jest na liście "do usunięcia" (już przeskoczony), oznacz go wizualnie (opcjonalne)
+        if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) {
+            pieceDiv.style.opacity = '0.5'; // Przeskoczony pionek jest "duchem"
         }
 
         square.appendChild(pieceDiv);
       }
-      
-      // Jeśli pole jest podświetlone jako możliwe
-      if (square.classList.contains('highlight')) {
-          // Styl CSS załatwia kropkę, nie trzeba tu nic dodawać
-      }
     }
   }
+  
+  // Ponowne nałożenie podświetleń, jeśli są jakieś aktywne
+  highlightValidMoves(validMovesForSelected);
 }
 
 function onSquareClick(row, col) {
-  // Jeśli mamy przymus kontynuacji bicia
   if (pieceLockedForCapture) {
-      if (selectedSquare.row === row && selectedSquare.col === col) {
-          // Kliknięto na ten sam pionek - ok, nic nie rób
-          return;
-      }
-      // Sprawdź czy kliknięto na dostępne pole docelowe
+      if (selectedSquare.row === row && selectedSquare.col === col) return;
+      
       const move = validMovesForSelected.find(m => m.toRow === row && m.toCol === col);
       if (move) {
           makeMove(selectedSquare.row, selectedSquare.col, row, col, true);
@@ -88,49 +83,38 @@ function onSquareClick(row, col) {
   }
 
   const piece = gameState.grid[row][col];
-  
-  // Wybór własnego pionka
-  if (piece && piece.startsWith(gameState.currentPlayer)) {
+  // Nie można wybrać pionka, który już został "przeskoczony" w tej turze (jest w pendingCaptures)
+  if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
+
+  if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     selectedSquare = { row, col };
     validMovesForSelected = getValidMovesForPiece(row, col);
-    
-    // Renderuj planszę od nowa żeby wyczyścić poprzednie podświetlenia
-    clearHighlights(); 
-    highlightValidMoves(validMovesForSelected);
+    renderBoard(); // Odśwież, by usunąć stare podświetlenia
   } 
-  // Ruch na puste pole
   else if (selectedSquare) {
     const move = validMovesForSelected.find((m) => m.toRow === row && m.toCol === col);
     if (move) {
       makeMove(selectedSquare.row, selectedSquare.col, row, col, move.isCapture);
     } else {
-      // Kliknięcie w puste pole bez ruchu = odznaczenie
       selectedSquare = null;
       validMovesForSelected = [];
-      clearHighlights();
+      renderBoard();
     }
   }
 }
 
 function getValidMovesForPiece(row, col) {
   const player = gameState.currentPlayer;
-  // Sprawdź czy na CAŁEJ planszy jest przymus bicia
   const mandatoryCapture = hasAnyCapture(gameState.grid, player);
+  const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col, pendingCaptures); // Przekazujemy pendingCaptures!
   
-  const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col);
-  
-  // Jeśli jest przymus bicia:
   if (mandatoryCapture) {
-    // Jeśli ten pionek może bić, pokaż mu bicia.
     if (captureMoves.length > 0) {
         return captureMoves.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
     } else {
-        // Jeśli inny pionek musi bić, ten nie może się ruszyć.
         return [];
     }
-  } 
-  // Brak przymusu bicia - zwykłe ruchy
-  else {
+  } else {
     const simpleMoves = [];
     const directions = player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
     directions.forEach(([dr, dc]) => {
@@ -148,47 +132,54 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   const previousBoard = JSON.parse(JSON.stringify(gameState.grid));
   const previousPlayer = gameState.currentPlayer;
 
-  // Przesuń w danych
+  // Przesuń pionka
   gameState.grid[toRow][toCol] = gameState.grid[fromRow][fromCol];
   gameState.grid[fromRow][fromCol] = 0;
 
   let moreCapturesAvailable = false;
 
   if (isCapture) {
-    // Usuń zbity pionek
+    // Znajdź pozycję zbitego pionka
     const capRow = (fromRow + toRow) / 2;
     const capCol = (fromCol + toCol) / 2;
-    gameState.grid[capRow][capCol] = 0;
+    
+    // Zamiast usuwać, dodaj do listy oczekujących na usunięcie
+    pendingCaptures.push({ r: capRow, c: capCol });
 
-    // Sprawdź, czy ten sam pionek z NOWEGO miejsca może bić dalej
-    const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol);
+    // Sprawdź, czy są dalsze bicia z nowej pozycji
+    // WAŻNE: Musimy przekazać pendingCaptures do reguł, aby nie można było przeskoczyć tego samego!
+    const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
+    
     if (nextCaptures.length > 0) {
       moreCapturesAvailable = true;
-      
-      // Zablokuj stan gry na tym pionku
       pieceLockedForCapture = true;
       selectedSquare = { row: toRow, col: toCol };
       validMovesForSelected = nextCaptures.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
       
-      // Odśwież widok z podświetleniem tylko kolejnych skoków
-      renderBoard(); // przerysuj pionki
-      highlightValidMoves(validMovesForSelected);
-      
-      console.log("Wielokrotne bicie dostępne!");
-      return; // WAŻNE: Nie zmieniamy gracza, wychodzimy z funkcji
+      renderBoard(); 
+      return; // Kontynuuj turę
     }
   }
 
-  // Koniec tury
-  gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
-  pieceLockedForCapture = false;
-  selectedSquare = null;
-  validMovesForSelected = [];
-  
-  moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
-  
-  updateCurrentPlayerDisplay();
-  renderBoard(); // przerysuj wszystko na czysto
+  // Jeśli koniec sekwencji bicia (lub zwykły ruch)
+  if (!moreCapturesAvailable) {
+      // TERAZ faktycznie usuń wszystkie zbite pionki z planszy
+      pendingCaptures.forEach(cap => {
+          gameState.grid[cap.r][cap.c] = 0;
+      });
+      pendingCaptures = []; // Wyczyść listę
+
+      // Zmień gracza
+      gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+      pieceLockedForCapture = false;
+      selectedSquare = null;
+      validMovesForSelected = [];
+      
+      moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
+      
+      updateCurrentPlayerDisplay();
+      renderBoard();
+  }
 }
 
 function highlightValidMoves(moves) {
@@ -196,8 +187,4 @@ function highlightValidMoves(moves) {
     const square = document.querySelector(`#board .square[data-row='${toRow}'][data-col='${toCol}']`);
     if (square) square.classList.add('highlight');
   });
-}
-
-function clearHighlights() {
-  document.querySelectorAll('.highlight').forEach(sq => sq.classList.remove('highlight'));
 }
