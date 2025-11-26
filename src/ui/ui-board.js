@@ -40,11 +40,14 @@ export function initUI() {
   const copyBtn = document.getElementById('copy-state-btn');
   if(copyBtn) {
       copyBtn.onclick = () => {
-          const text = document.getElementById('board-state-output').textContent;
-          navigator.clipboard.writeText(text);
-          const originalText = copyBtn.textContent;
-          copyBtn.textContent = "Skopiowano!";
-          setTimeout(() => copyBtn.textContent = originalText, 1500);
+          const output = document.getElementById('board-state-output');
+          if(output) {
+            const text = output.textContent;
+            navigator.clipboard.writeText(text);
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = "Skopiowano!";
+            setTimeout(() => copyBtn.textContent = originalText, 1500);
+          }
       };
   }
 
@@ -61,20 +64,24 @@ export function updateCurrentPlayerDisplay() {
 }
 
 export function renderBoard() {
-  let squareNumber = 1;
+  let squareNumber = 1; // Reset licznika dla numeracji
 
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
+      // Pobierz element pola
       const square = document.querySelector(`#board .square[data-row='${r}'][data-col='${c}']`);
-      if (!square) continue;
       
       const isDark = (r + c) % 2 !== 0;
+      // Oblicz numer pola, nawet jeśli square nie istnieje (aby zachować ciągłość licznika)
       let currentNum = isDark ? squareNumber++ : null;
 
-      // Czyścimy i przywracamy numer
+      if (!square) continue; // Jeśli błąd DOM, pomiń rysowanie
+
+      // Czyścimy zawartość (usuwamy stare pionki i numerki)
       square.innerHTML = '';
       square.classList.remove('highlight');
       
+      // Przywróć numer pola
       if (currentNum !== null) {
           const numberSpan = document.createElement('span');
           numberSpan.className = 'square-number';
@@ -82,24 +89,36 @@ export function renderBoard() {
           square.appendChild(numberSpan);
       }
       
+      // Rysuj pionek
       const pieceCode = gameState.grid[r][c]; 
       if (pieceCode !== 0) {
         const pieceDiv = document.createElement('div');
         pieceDiv.classList.add('piece');
+        
         if (typeof pieceCode === 'string') {
              if (pieceCode.includes('white')) pieceDiv.classList.add('white');
              if (pieceCode.includes('black')) pieceDiv.classList.add('black');
              if (pieceCode.includes('king')) pieceDiv.classList.add('king');
         }
+        
         if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) {
             pieceDiv.style.opacity = '0.4'; 
         }
+
         square.appendChild(pieceDiv);
       }
     }
   }
+
+  // Podświetlenia
   highlightValidMoves(validMovesForSelected);
-  updateBoardStateDisplay(); // NOWE: Aktualizacja panelu bocznego
+
+  // Aktualizacja panelu bocznego (Safe Mode)
+  try {
+      updateBoardStateDisplay();
+  } catch (e) {
+      console.warn("Błąd aktualizacji panelu bocznego:", e);
+  }
 }
 
 function updateBoardStateDisplay() {
@@ -184,7 +203,7 @@ function onSquareClick(row, col) {
   }
 }
 
-// Export funkcji do testów (ważne!)
+// Export funkcji dla testów
 export function getValidMovesForPiece(row, col) {
   const player = gameState.currentPlayer;
   const mandatoryCapture = hasAnyCapture(gameState.grid, player);
