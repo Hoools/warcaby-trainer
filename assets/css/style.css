@@ -39,3 +39,8 @@ body {
 #controls {
   margin-top: 10px;
 }
+.square.highlight {
+  outline: 3px solid yellow;
+  cursor: pointer;
+}
+

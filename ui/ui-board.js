@@ -1,5 +1,7 @@
-// Rysowanie planszy i obsługa kliknięć
+let selectedSquare = null;
+let validMovesForSelected = [];
 
+// Inicjalizacja UI planszy
 function initUI() {
   const boardDiv = document.getElementById('board');
   boardDiv.innerHTML = '';
@@ -10,28 +12,108 @@ function initUI() {
       square.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
       square.dataset.row = r;
       square.dataset.col = c;
+      square.addEventListener('click', () => onSquareClick(r, c));
       boardDiv.appendChild(square);
     }
   }
 
+  updateCurrentPlayerDisplay();
   renderBoard();
 }
 
-function renderBoard() {
-  const squares = document.querySelectorAll('#board .square');
-  squares.forEach(sq => {
-    sq.innerHTML = '';
-    const r = parseInt(sq.dataset.row, 10);
-    const c = parseInt(sq.dataset.col, 10);
-    const piece = board.grid[r][c];
-    if (piece === 'w') {
-      const pawn = document.createElement('div');
-      pawn.className = 'pawn white';
-      sq.appendChild(pawn);
-    } else if (piece === 'b') {
-      const pawn = document.createElement('div');
-      pawn.className = 'pawn black';
-      sq.appendChild(pawn);
+// Wyświetl informację o obecnym graczu na ruchu
+function updateCurrentPlayerDisplay() {
+  const statusDiv = document.getElementById('status');
+  statusDiv.textContent = `Na ruchu: ${board.currentPlayer}`;
+}
+
+// Obsługa kliknięcia w pole
+function onSquareClick(row, col) {
+  // Jeśli kliknięto na pionek aktualnego gracza
+  if (
+    board.grid[row][col] &&
+    board.grid[row][col][0] === board.currentPlayer[0]
+  ) {
+    selectedSquare = { row, col };
+    validMovesForSelected = getValidMovesForPiece(row, col);
+    highlightValidMoves(validMovesForSelected);
+  } else if (selectedSquare) {
+    // Sprawdzamy, czy kliknięte pole jest wśród podświetlonych (legalnych ruchów)
+    if (
+      validMovesForSelected.some(
+        (mv) => mv.toRow === row && mv.toCol === col
+      )
+    ) {
+      makeMove(selectedSquare.row, selectedSquare.col, row, col);
+      selectedSquare = null;
+      validMovesForSelected = [];
+      clearHighlights();
+      updateCurrentPlayerDisplay();
+      renderBoard();
+    } else {
+      // Kliknięcie poza legalne ruchy - czyścimy wybór
+      selectedSquare = null;
+      validMovesForSelected = [];
+      clearHighlights();
+    }
+  }
+}
+
+function getValidMovesForPiece(row, col) {
+  const player = board.currentPlayer;
+  const moves = [];
+
+  // Sprawdź ruchy proste o 1 pole diagonalnie
+  const directions = player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+  directions.forEach(([dr, dc]) => {
+    const nr = row + dr;
+    const nc = col + dc;
+    if (isValidMove(board.grid, row, col, nr, nc, player)) {
+      moves.push({ toRow: nr, toCol: nc });
+    }
+  });
+
+  // Sprawdź ruchy bicia
+  const captureMoves = getPossibleCaptures(board.grid, row, col, player);
+  captureMoves.forEach(([nr, nc]) => {
+    moves.push({ toRow: nr, toCol: nc });
+  });
+
+  return moves;
+}
+
+function highlightValidMoves(moves) {
+  clearHighlights();
+  moves.forEach(({ toRow, toCol }) => {
+    const square = document.querySelector(
+      `#board .square[data-row='${toRow}'][data-col='${toCol}']`
+    );
+    if (square) {
+      square.classList.add('highlight');
     }
   });
 }
+
+function clearHighlights() {
+  document.querySelectorAll('#board .square.highlight').forEach((sq) => {
+    sq.classList.remove('highlight');
+  });
+}
+
+// Przykładowa funkcja wykonywania ruchu (aktualizuje stan planszy)
+function makeMove(fromRow, fromCol, toRow, toCol) {
+  board.grid[toRow][toCol] = board.grid[fromRow][fromCol];
+  board.grid[fromRow][fromCol] = 0;
+
+  // Sprawdzenie i usunięcie zbitego pionka (dla ruchu bicia)
+  if (Math.abs(toRow - fromRow) === 2) {
+    const capRow = (fromRow + toRow) / 2;
+    const capCol = (fromCol + toCol) / 2;
+    board.grid[capRow][capCol] = 0;
+  }
+
+  // Zmiana gracza na ruchu
+  board.currentPlayer = board.currentPlayer === 'white' ? 'black' : 'white';
+}
+
+export { initUI };
