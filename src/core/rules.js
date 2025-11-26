@@ -1,6 +1,6 @@
 // src/core/rules.js
 
-// --- Helpery (prywatne lub publiczne jeśli potrzebne w testach) ---
+// --- Helpery ---
 
 function isSquareOnBoard(r, c) {
   return r >= 0 && r < 10 && c >= 0 && c < 10;
@@ -71,11 +71,14 @@ export function isValidMove(board, fromRow, fromCol, toRow, toCol, player) {
   return false;
 }
 
-export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = []) {
-  const piece = board[row][col];
-  if (!piece) return [];
+// Główna funkcja generująca możliwe bicia (pojedynczy skok)
+// 'piece' jest opcjonalne, jeśli nie podane, pobiera z planszy.
+// Ale w rekurencji MUSI być podane (bo na planszy pionka już nie ma w miejscu startu symulacji).
+export function getPossibleCaptures(board, row, col, piece, pendingCaptures = []) {
+  const currentPiece = piece || board[row][col];
+  if (!currentPiece) return [];
 
-  const isKing = piece.includes('king');
+  const isKing = currentPiece.includes('king');
   const captures = [];
   const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
@@ -91,8 +94,8 @@ export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = [
             const cellContent = board[rCurrent][cCurrent];
             
             if (!foundEnemy) {
-                if (cellContent !== 0 && !isOpponent(piece, cellContent)) break;
-                if (isOpponent(piece, cellContent)) {
+                if (cellContent !== 0 && !isOpponent(currentPiece, cellContent)) break;
+                if (isOpponent(currentPiece, cellContent)) {
                     const alreadyJumped = pendingCaptures.some(cap => cap.r === rCurrent && cap.c === cCurrent);
                     if (alreadyJumped) break; 
                     foundEnemy = true;
@@ -111,7 +114,7 @@ export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = [
             const midCol = col + dc;
             const midPiece = board[midRow][midCol];
             const alreadyJumped = pendingCaptures.some(cap => cap.r === midRow && cap.c === midCol);
-            if (isOpponent(piece, midPiece) && !alreadyJumped) {
+            if (isOpponent(currentPiece, midPiece) && !alreadyJumped) {
                 captures.push([toRow, toCol]);
             }
         }
@@ -120,12 +123,17 @@ export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = [
   return captures;
 }
 
+// Wrapper dla kompatybilności wstecznej
+export function getPossibleCapturesForPiece(board, row, col, pendingCaptures = []) {
+    return getPossibleCaptures(board, row, col, board[row][col], pendingCaptures);
+}
+
 export function hasAnyCapture(board, player) {
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
       const piece = board[r][c];
       if (piece && piece.startsWith(player)) {
-        if (getPossibleCapturesForPiece(board, r, c, []).length > 0) {
+        if (getPossibleCaptures(board, r, c, piece, []).length > 0) {
           return true;
         }
       }
@@ -134,9 +142,10 @@ export function hasAnyCapture(board, player) {
   return false;
 }
 
-// Rekurencyjne liczenie głębokości bicia
-export function calculateMaxCaptures(board, row, col, pendingCaptures = []) {
-    const possibleMoves = getPossibleCapturesForPiece(board, row, col, pendingCaptures);
+// Rekurencyjne liczenie maksymalnej głębokości bicia
+// UWAGA: Musi przyjmować 'piece', bo w trakcie symulacji plansza jest pusta w miejscu 'row, col'
+export function calculateMaxCaptures(board, row, col, piece, pendingCaptures = []) {
+    const possibleMoves = getPossibleCaptures(board, row, col, piece, pendingCaptures);
     if (possibleMoves.length === 0) return 0;
 
     let maxDepth = 0;
@@ -146,16 +155,18 @@ export function calculateMaxCaptures(board, row, col, pendingCaptures = []) {
         const newPending = [...pendingCaptures];
         if (captured) newPending.push(captured);
 
-        const depth = 1 + calculateMaxCaptures(board, toR, toC, newPending);
+        // Przekazujemy 'piece' dalej, bo to ten sam pionek skacze dalej
+        const depth = 1 + calculateMaxCaptures(board, toR, toC, piece, newPending);
         if (depth > maxDepth) maxDepth = depth;
     });
     return maxDepth;
 }
 
-// --- GŁÓWNA FUNKCJA WALIDUJĄCA (Przeniesiona z UI) ---
+// --- GŁÓWNA FUNKCJA WALIDUJĄCA ---
 
 export function getValidMoves(board, row, col, player, pendingCaptures = []) {
     let globalMax = 0;
+    const movingPiece = board[row][col]; // Zapamiętujemy pionka, który się rusza
 
     // 1. Oblicz globalny max bić (tylko na początku tury)
     if (pendingCaptures.length === 0) {
@@ -163,21 +174,19 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
             for(let c=0; c<10; c++) {
                 const p = board[r][c];
                 if(p && p.startsWith(player)) {
-                    const m = calculateMaxCaptures(board, r, c, []);
+                    const m = calculateMaxCaptures(board, r, c, p, []);
                     if(m > globalMax) globalMax = m;
                 }
             }
         }
     } else {
-        // W trakcie sekwencji nie sprawdzamy innych pionków
-        globalMax = 0; 
+        globalMax = 0; // W trakcie sekwencji nie sprawdzamy innych
     }
 
     // 2. Brak bić -> Zwykłe ruchy
     if (globalMax === 0 && pendingCaptures.length === 0) {
         const simpleMoves = [];
-        const piece = board[row][col];
-        const isKing = piece.includes('king');
+        const isKing = movingPiece.includes('king');
         const directions = isKing ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] : (player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]]);
         
         directions.forEach(([dr, dc]) => {
@@ -197,7 +206,8 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
     }
 
     // 3. Są bicia -> Sprawdź ten pionek
-    const myMaxCaptures = calculateMaxCaptures(board, row, col, pendingCaptures);
+    // Przekazujemy movingPiece, bo calculateMaxCaptures tego wymaga w rekurencji
+    const myMaxCaptures = calculateMaxCaptures(board, row, col, movingPiece, pendingCaptures);
     
     // Jeśli to początek tury i pionek ma mniej bić niż globalny lider -> brak ruchów
     if (pendingCaptures.length === 0 && myMaxCaptures < globalMax) {
@@ -205,14 +215,14 @@ export function getValidMoves(board, row, col, player, pendingCaptures = []) {
     }
 
     // 4. Zwróć ruchy prowadzące do max wyniku
-    const captureMoves = getPossibleCapturesForPiece(board, row, col, pendingCaptures);
+    const captureMoves = getPossibleCaptures(board, row, col, movingPiece, pendingCaptures);
     const movesWithDepth = captureMoves.map(move => {
          const [toR, toC] = move;
          const captured = findCapturedPieceBetween(board, row, col, toR, toC);
          const newPending = [...pendingCaptures];
          if(captured) newPending.push(captured);
          
-         const further = calculateMaxCaptures(board, toR, toC, newPending);
+         const further = calculateMaxCaptures(board, toR, toC, movingPiece, newPending);
          return { toRow: toR, toCol: toC, isCapture: true, totalVal: 1 + further };
     });
 
