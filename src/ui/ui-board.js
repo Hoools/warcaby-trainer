@@ -1,243 +1,155 @@
-// src/ui/ui-board.js
 import { gameState } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
 import { getValidMoves, getPossibleCapturesForPiece, findCapturedPieceBetween, checkGameState } from '../core/rules.js';
+import { getBestMove } from '../core/ai.js'; // IMPORT AI
 
-let selectedSquare = null;
-let validMovesForSelected = [];
-let pieceLockedForCapture = false; 
-let pendingCaptures = []; 
+let selectedSquare = null, validMovesForSelected = [], pieceLockedForCapture = false, pendingCaptures = [];
 
 export function initUI() {
   const boardDiv = document.getElementById('board');
   if (!boardDiv) return;
   boardDiv.innerHTML = '';
-
-  let squareNumber = 1;
-  for (let r = 0; r < 10; r++) {
-    for (let c = 0; c < 10; c++) {
-      const isDark = (r + c) % 2 !== 0;
-      const square = document.createElement('div');
-      square.className = 'square ' + (isDark ? 'dark' : 'light');
-      square.dataset.row = r;
-      square.dataset.col = c;
-      square.addEventListener('click', () => onSquareClick(r, c));
-
-      if (isDark) {
-          const numberSpan = document.createElement('span');
-          numberSpan.className = 'square-number';
-          numberSpan.textContent = squareNumber++;
-          square.appendChild(numberSpan);
-      }
-      boardDiv.appendChild(square);
-    }
+  let sNum = 1;
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+      const isDark = (r + c) % 2 !== 0, sq = document.createElement('div');
+      sq.className = 'square ' + (isDark ? 'dark' : 'light'); sq.dataset.row = r; sq.dataset.col = c;
+      sq.addEventListener('click', () => onSquareClick(r, c));
+      if (isDark) { const sp = document.createElement('span'); sp.className = 'square-number'; sp.textContent = sNum++; sq.appendChild(sp); }
+      boardDiv.appendChild(sq);
   }
-  
-  const copyBtn = document.getElementById('copy-state-btn');
-  if(copyBtn) {
-      copyBtn.onclick = () => {
-          const output = document.getElementById('board-state-output');
-          if(output) {
-            navigator.clipboard.writeText(output.textContent);
-            const originalText = copyBtn.textContent;
-            copyBtn.textContent = "Skopiowano!";
-            setTimeout(() => copyBtn.textContent = originalText, 1500);
-          }
-      };
-  }
-
-  updateCurrentPlayerDisplay();
-  applyBoardRotation(); // Aplikuj obrót przy inicjalizacji
+  updateCurrentPlayerDisplay(); 
+  applyBoardRotation(); 
   renderBoard();
-}
 
-export function updateCurrentPlayerDisplay() {
-  const statusDiv = document.getElementById('status');
-  if (statusDiv) {
-      const plName = gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne';
-      statusDiv.textContent = `Na ruchu: ${plName}`;
+  // Jeśli gra zaczyna się turą AI (np. gracz wybrał Czarne)
+  if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor) {
+      setTimeout(() => performAiMove(), 1000);
   }
 }
 
-// NOWA FUNKCJA: Zarządzanie klasą CSS obrotu
+export function updateCurrentPlayerDisplay() { const s = document.getElementById('status'); if (s) s.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`; }
 export function applyBoardRotation() {
-    const boardDiv = document.getElementById('board');
-    if (!boardDiv) return;
-
-    if (gameState.boardRotation === 180) {
-        boardDiv.classList.add('board-rotated');
-    } else {
-        boardDiv.classList.remove('board-rotated');
-    }
+    const b = document.getElementById('board');
+    if (b) gameState.boardRotation === 180 ? b.classList.add('board-rotated') : b.classList.remove('board-rotated');
 }
-
 export function renderBoard() {
-  let squareNumber = 1; 
-  for (let r = 0; r < 10; r++) {
-    for (let c = 0; c < 10; c++) {
-      const square = document.querySelector(`#board .square[data-row='${r}'][data-col='${c}']`);
-      const isDark = (r + c) % 2 !== 0;
-      let currentNum = isDark ? squareNumber++ : null;
-
-      if (!square) continue; 
-      
-      square.innerHTML = '';
-      square.classList.remove('highlight');
-      
-      if (currentNum !== null) {
-          const numberSpan = document.createElement('span');
-          numberSpan.className = 'square-number';
-          numberSpan.textContent = currentNum;
-          square.appendChild(numberSpan);
+  let sNum = 1; 
+  for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) {
+      const sq = document.querySelector(`#board .square[data-row='${r}'][data-col='${c}']`), isDark = (r + c) % 2 !== 0, num = isDark ? sNum++ : null;
+      if (!sq) continue; 
+      sq.innerHTML = ''; sq.classList.remove('highlight');
+      if (num) { const sp = document.createElement('span'); sp.className = 'square-number'; sp.textContent = num; sq.appendChild(sp); }
+      const p = gameState.grid[r][c]; 
+      if (p !== 0) {
+        const pd = document.createElement('div'); pd.classList.add('piece');
+        if (typeof p === 'string') { if (p.includes('white')) pd.classList.add('white'); if (p.includes('black')) pd.classList.add('black'); if (p.includes('king')) pd.classList.add('king'); }
+        if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) pd.style.opacity = '0.4';
+        sq.appendChild(pd);
       }
-      
-      const pieceCode = gameState.grid[r][c]; 
-      if (pieceCode !== 0) {
-        const pieceDiv = document.createElement('div');
-        pieceDiv.classList.add('piece');
-        if (typeof pieceCode === 'string') {
-             if (pieceCode.includes('white')) pieceDiv.classList.add('white');
-             if (pieceCode.includes('black')) pieceDiv.classList.add('black');
-             if (pieceCode.includes('king')) pieceDiv.classList.add('king');
-        }
-        if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) {
-            pieceDiv.style.opacity = '0.4'; 
-        }
-        square.appendChild(pieceDiv);
-      }
-    }
   }
-  
-  highlightValidMoves(validMovesForSelected);
-  applyBoardRotation(); // Upewnij się, że klasa jest na miejscu po renderowaniu
-  try { updateBoardStateDisplay(); } catch(e) { console.warn(e); }
-}
-
-function updateBoardStateDisplay() {
-    const outputDiv = document.getElementById('board-state-output');
-    if (!outputDiv) return;
-
-    const whitePieces = [], whiteKings = [], blackPieces = [], blackKings = [];
-    let sNum = 1;
-    for (let r = 0; r < 10; r++) {
-        for (let c = 0; c < 10; c++) {
-            if ((r+c)%2!==0) {
-                const p = gameState.grid[r][c];
-                if(p === 'white') whitePieces.push(sNum);
-                else if(p === 'white_king') whiteKings.push(sNum);
-                else if(p === 'black') blackPieces.push(sNum);
-                else if(p === 'black_king') blackKings.push(sNum);
-                sNum++;
-            }
-        }
-    }
-    outputDiv.textContent = `Current Player: ${gameState.currentPlayer.toUpperCase()}
-
-WHITE:
-- Men: [${whitePieces.join(', ')}]
-- Kings: [${whiteKings.join(', ')}]
-
-BLACK:
-- Men: [${blackPieces.join(', ')}]
-- Kings: [${blackKings.join(', ')}]
-
-Total: ${whitePieces.length + whiteKings.length + blackPieces.length + blackKings.length}`;
+  validMovesForSelected.forEach(m => document.querySelector(`#board .square[data-row='${m.toRow}'][data-col='${m.toCol}']`)?.classList.add('highlight'));
+  applyBoardRotation();
 }
 
 function onSquareClick(row, col) {
-  if (gameState.isEditorMode) {
-      if ((row + col) % 2 !== 0) {
-          gameState.grid[row][col] = gameState.selectedEditorPiece;
-          renderBoard();
-      }
-      return;
-  }
+  // Blokada klikania, gdy tura AI
+  if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor) return;
 
+  if (gameState.isEditorMode) { if ((row + col) % 2 !== 0) { gameState.grid[row][col] = gameState.selectedEditorPiece; renderBoard(); } return; }
   if (pieceLockedForCapture) {
       if (selectedSquare.row === row && selectedSquare.col === col) return;
       const move = validMovesForSelected.find(m => m.toRow === row && m.toCol === col);
       if (move) makeMove(selectedSquare.row, selectedSquare.col, row, col, true);
       return;
   }
-
   const piece = gameState.grid[row][col];
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
-
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     const moves = getValidMoves(gameState.grid, row, col, gameState.currentPlayer, pendingCaptures);
-    selectedSquare = { row, col };
-    validMovesForSelected = moves;
-    renderBoard(); 
-  } 
-  else if (selectedSquare) {
+    selectedSquare = { row, col }; validMovesForSelected = moves; renderBoard(); 
+  } else if (selectedSquare) {
     const move = validMovesForSelected.find((m) => m.toRow === row && m.toCol === col);
     if (move) makeMove(selectedSquare.row, selectedSquare.col, row, col, move.isCapture);
-    else {
-      selectedSquare = null;
-      validMovesForSelected = [];
-      renderBoard();
-    }
+    else { selectedSquare = null; validMovesForSelected = []; renderBoard(); }
   }
 }
 
 export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
-  const previousBoard = JSON.parse(JSON.stringify(gameState.grid));
-  const previousPlayer = gameState.currentPlayer;
-
-  gameState.grid[toRow][toCol] = gameState.grid[fromRow][fromCol];
-  gameState.grid[fromRow][fromCol] = 0;
-
-  let moreCapturesAvailable = false;
-
+  const prevBoard = JSON.parse(JSON.stringify(gameState.grid)), prevPlayer = gameState.currentPlayer;
+  gameState.grid[toRow][toCol] = gameState.grid[fromRow][fromCol]; gameState.grid[fromRow][fromCol] = 0;
+  
   if (isCapture) {
-    const captured = findCapturedPieceBetween(gameState.grid, fromRow, fromCol, toRow, toCol);
-    if (captured) pendingCaptures.push(captured);
-
-    const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
-    if (nextCaptures.length > 0) {
-      const validNext = getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures);
-      if (validNext.length > 0) {
-          moreCapturesAvailable = true;
-          pieceLockedForCapture = true;
-          selectedSquare = { row: toRow, col: toCol };
-          validMovesForSelected = validNext;
-          renderBoard(); 
-          return;
-      }
+    const cap = findCapturedPieceBetween(gameState.grid, fromRow, fromCol, toRow, toCol);
+    if (cap) pendingCaptures.push(cap);
+    
+    // Sprawdzenie wielokrotnego bicia
+    if (getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures).length > 0 && getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures).length > 0) {
+          pieceLockedForCapture = true; selectedSquare = { row: toRow, col: toCol }; validMovesForSelected = getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures); renderBoard(); return;
     }
   }
-
-  if (pendingCaptures.length > 0) {
-      pendingCaptures.forEach(cap => { gameState.grid[cap.r][cap.c] = 0; });
-      pendingCaptures = [];
-  }
-
-  const piece = gameState.grid[toRow][toCol];
-  if (piece && !piece.includes('king')) {
-      if (gameState.currentPlayer === 'white' && toRow === 0) gameState.grid[toRow][toCol] = 'white_king';
-      if (gameState.currentPlayer === 'black' && toRow === 9) gameState.grid[toRow][toCol] = 'black_king';
-  }
-
+  
+  // Koniec ruchu - czyszczenie
+  if (pendingCaptures.length > 0) { pendingCaptures.forEach(c => gameState.grid[c.r][c.c] = 0); pendingCaptures = []; }
+  const p = gameState.grid[toRow][toCol];
+  if (p && !p.includes('king')) { if (gameState.currentPlayer === 'white' && toRow === 0) gameState.grid[toRow][toCol] = 'white_king'; if (gameState.currentPlayer === 'black' && toRow === 9) gameState.grid[toRow][toCol] = 'black_king'; }
+  
+  // Zmiana gracza
   gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
-  pieceLockedForCapture = false;
-  selectedSquare = null;
-  validMovesForSelected = [];
-  moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
-  updateCurrentPlayerDisplay();
-  renderBoard();
-
+  pieceLockedForCapture = false; selectedSquare = null; validMovesForSelected = [];
+  
+  moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard: prevBoard, previousPlayer: prevPlayer });
+  updateCurrentPlayerDisplay(); renderBoard();
+  
   const winner = checkGameState(gameState.grid, gameState.currentPlayer);
   if (winner) {
-      setTimeout(() => {
-          const winnerName = winner === 'white' ? 'Białe' : 'Czarne';
-          alert(`KONIEC GRY! Wygrywają: ${winnerName}`);
-      }, 100);
+      setTimeout(() => alert(`KONIEC GRY! Wygrywają: ${winner === 'white' ? 'Białe' : 'Czarne'}`), 100);
+      return;
+  }
+
+  // --- AI TRIGGER ---
+  // Tylko jeśli gra trwa, to tura komputera, ORAZ nie jesteśmy w trakcie wielokrotnego bicia
+  if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor && !pieceLockedForCapture) {
+      setTimeout(() => performAiMove(), 500);
   }
 }
 
-function highlightValidMoves(moves) {
-  moves.forEach(({ toRow, toCol }) => {
-    const square = document.querySelector(`#board .square[data-row='${toRow}'][data-col='${toCol}']`);
-    if (square) square.classList.add('highlight');
-  });
+// --- LOGIKA RUCHÓW AI (W TYM WIELOKROTNE BICIE) ---
+async function performAiMove() {
+    // 1. Decyzja Minimaxa (pierwszy ruch)
+    const move = getBestMove(gameState.grid, gameState.currentPlayer);
+    
+    if (!move) {
+        console.log("AI poddaje się (brak ruchów).");
+        return;
+    }
+
+    // 2. Wykonanie pierwszego skoku
+    makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol, move.isCapture);
+
+    // 3. Obsługa serii bić (jeśli makeMove zablokował pionka w trybie bicia)
+    if (pieceLockedForCapture && selectedSquare) {
+        await continueAiJumpChain();
+    }
+}
+
+async function continueAiJumpChain() {
+    // Pętla rekurencyjna wykonująca kolejne skoki
+    if (!pieceLockedForCapture || !selectedSquare) return;
+
+    // Opóźnienie dla efektu wizualnego
+    await new Promise(r => setTimeout(r, 400));
+
+    const moves = getValidMoves(gameState.grid, selectedSquare.row, selectedSquare.col, gameState.currentPlayer, pendingCaptures);
+    if (moves.length > 0) {
+        // Wybieramy pierwszy dostępny ruch bicia (wymuszenie)
+        const nextHop = moves[0];
+        
+        // Wykonujemy skok
+        makeMove(selectedSquare.row, selectedSquare.col, nextHop.toRow, nextHop.toCol, nextHop.isCapture);
+        
+        // Jeśli nadal trzeba bić, powtarzamy
+        if (pieceLockedForCapture) {
+            await continueAiJumpChain();
+        }
+    }
 }
