@@ -1,5 +1,4 @@
-// src/ui/ui-board.js
-import { gameState } from '../core/gameState.js'; // Import stanu!
+import { gameState } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
 import { isValidMove, getPossibleCaptures } from '../core/rules.js';
 
@@ -8,7 +7,7 @@ let validMovesForSelected = [];
 
 export function initUI() {
   const boardDiv = document.getElementById('board');
-  if (!boardDiv) return; // Zabezpieczenie
+  if (!boardDiv) return;
   boardDiv.innerHTML = '';
 
   for (let r = 0; r < 10; r++) {
@@ -21,7 +20,6 @@ export function initUI() {
       boardDiv.appendChild(square);
     }
   }
-
   updateCurrentPlayerDisplay();
   renderBoard();
 }
@@ -37,24 +35,25 @@ export function renderBoard() {
       const square = document.querySelector(
         `#board .square[data-row='${r}'][data-col='${c}']`
       );
-      const piece = gameState.grid[r][c];
-      square.textContent = piece ? piece : '';
-      
-      // Opcjonalnie: dodanie klasy dla stylizacji CSS pionków
-      square.setAttribute('data-piece', piece || '');
+      if (square) {
+        const piece = gameState.grid[r][c];
+        square.textContent = piece !== 0 ? piece : '';
+      }
     }
   }
 }
 
 function onSquareClick(row, col) {
-  // Logika obsługi kliknięcia korzystająca z gameState.grid
   const piece = gameState.grid[row][col];
   
-  if (piece && piece[0] === gameState.currentPlayer[0]) {
+  // Select piece
+  if (piece && (typeof piece === 'string' ? piece[0] : '') === gameState.currentPlayer[0]) {
     selectedSquare = { row, col };
     validMovesForSelected = getValidMovesForPiece(row, col);
     highlightValidMoves(validMovesForSelected);
-  } else if (selectedSquare) {
+  } 
+  // Move to selected square
+  else if (selectedSquare) {
     if (validMovesForSelected.some((mv) => mv.toRow === row && mv.toCol === col)) {
       makeMove(selectedSquare.row, selectedSquare.col, row, col);
       selectedSquare = null;
@@ -73,48 +72,61 @@ function onSquareClick(row, col) {
 function getValidMovesForPiece(row, col) {
   const player = gameState.currentPlayer;
   const moves = [];
-  // Tutaj logika sprawdzania ruchów (uproszczona na potrzeby naprawy)
-  // Pamiętaj, żeby w rules.js też przyjmować (board, ...) a nie polegać na globalnym
   
-  // Przykład prosty:
-  const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]]; 
+  // Check simple moves
+  const directions = player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
   directions.forEach(([dr, dc]) => {
-      const nr = row + dr;
-      const nc = col + dc;
-      if(isValidMove(gameState.grid, row, col, nr, nc, player)) {
-          moves.push({ toRow: nr, toCol: nc });
-      }
+    const nr = row + dr;
+    const nc = col + dc;
+    // Pass gameState.grid explicitly
+    if (isValidMove(gameState.grid, row, col, nr, nc, player)) {
+      moves.push({ toRow: nr, toCol: nc });
+    }
   });
-  
+
+  // Check captures
+  const captureMoves = getPossibleCaptures(gameState.grid, row, col, player);
+  captureMoves.forEach(([nr, nc]) => {
+    moves.push({ toRow: nr, toCol: nc });
+  });
+
   return moves;
 }
 
 function highlightValidMoves(moves) {
   clearHighlights();
   moves.forEach(({ toRow, toCol }) => {
-    const square = document.querySelector(`#board .square[data-row='${toRow}'][data-col='${toCol}']`);
+    const square = document.querySelector(
+      `#board .square[data-row='${toRow}'][data-col='${toCol}']`
+    );
     if (square) square.classList.add('highlight');
   });
 }
 
 function clearHighlights() {
-  document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+  document.querySelectorAll('.highlight').forEach((sq) => {
+    sq.classList.remove('highlight');
+  });
 }
 
 export function makeMove(fromRow, fromCol, toRow, toCol) {
   const previousBoard = JSON.parse(JSON.stringify(gameState.grid));
   const previousPlayer = gameState.currentPlayer;
 
-  // Przesunięcie
   gameState.grid[toRow][toCol] = gameState.grid[fromRow][fromCol];
   gameState.grid[fromRow][fromCol] = 0;
 
-  // Zmiana gracza
+  // Capture logic
+  if (Math.abs(toRow - fromRow) === 2) {
+    const capRow = (fromRow + toRow) / 2;
+    const capCol = (fromCol + toCol) / 2;
+    gameState.grid[capRow][capCol] = 0;
+  }
+
   gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
-  
-  // Zapisz historię
+
   moveHistory.addMove({
-      fromRow, fromCol, toRow, toCol,
-      previousBoard, previousPlayer
+    fromRow, fromCol, toRow, toCol,
+    previousBoard, previousPlayer
   });
 }
