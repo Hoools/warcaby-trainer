@@ -47,6 +47,7 @@ export function initUI() {
   }
 
   updateCurrentPlayerDisplay();
+  applyBoardRotation(); // Aplikuj obrót przy inicjalizacji
   renderBoard();
 }
 
@@ -56,6 +57,18 @@ export function updateCurrentPlayerDisplay() {
       const plName = gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne';
       statusDiv.textContent = `Na ruchu: ${plName}`;
   }
+}
+
+// NOWA FUNKCJA: Zarządzanie klasą CSS obrotu
+export function applyBoardRotation() {
+    const boardDiv = document.getElementById('board');
+    if (!boardDiv) return;
+
+    if (gameState.boardRotation === 180) {
+        boardDiv.classList.add('board-rotated');
+    } else {
+        boardDiv.classList.remove('board-rotated');
+    }
 }
 
 export function renderBoard() {
@@ -96,6 +109,7 @@ export function renderBoard() {
   }
   
   highlightValidMoves(validMovesForSelected);
+  applyBoardRotation(); // Upewnij się, że klasa jest na miejscu po renderowaniu
   try { updateBoardStateDisplay(); } catch(e) { console.warn(e); }
 }
 
@@ -212,7 +226,6 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   updateCurrentPlayerDisplay();
   renderBoard();
 
-  // Detekcja końca gry
   const winner = checkGameState(gameState.grid, gameState.currentPlayer);
   if (winner) {
       setTimeout(() => {

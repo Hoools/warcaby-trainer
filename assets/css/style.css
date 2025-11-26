@@ -94,6 +94,8 @@ body {
     border: 10px solid #5d4037;
     box-shadow: 0 10px 20px rgba(0,0,0,0.5);
     background-color: #5d4037;
+    /* Płynne przejście obrotu */
+    transition: transform 0.5s ease-in-out;
 }
 
 .square {
@@ -103,6 +105,8 @@ body {
     justify-content: center;
     align-items: center;
     position: relative;
+    /* Płynne przejście obrotu zawartości */
+    transition: transform 0.5s ease-in-out;
 }
 
 .square.light { background-color: #f0d9b5; }
@@ -181,3 +185,13 @@ button {
     transition: background 0.2s;
 }
 button:hover { background-color: #2980b9; }
+
+/* NOWE: Klasy do obracania planszy */
+.board-rotated {
+    transform: rotate(180deg);
+}
+
+/* Obracamy pola z powrotem, żeby pionki były "głową do góry" */
+.board-rotated .square {
+    transform: rotate(180deg);
+}

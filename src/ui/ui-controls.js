@@ -1,7 +1,7 @@
 // src/ui/ui-controls.js
 import { gameState, initGame, clearBoard } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
-import { renderBoard, updateCurrentPlayerDisplay, initUI } from './ui-board.js';
+import { renderBoard, updateCurrentPlayerDisplay, initUI, applyBoardRotation } from './ui-board.js';
 import { runTests } from '../tests/testRunner.js';
 import { gameTests } from '../tests/gameTests.js';
 
@@ -41,13 +41,22 @@ export function initControls() {
     initUI();
   };
 
-  // 3. Tryb Edycji
+  // 3. NOWE: Przycisk Obróć
+  const rotateBtn = document.createElement('button');
+  rotateBtn.textContent = '🔄 Obróć';
+  rotateBtn.style.backgroundColor = '#7f8c8d';
+  rotateBtn.onclick = () => {
+      gameState.boardRotation = gameState.boardRotation === 0 ? 180 : 0;
+      applyBoardRotation();
+  };
+
+  // 4. Tryb Edycji
   const editorToggleBtn = document.createElement('button');
   editorToggleBtn.textContent = '🔧 Edytor';
   editorToggleBtn.style.backgroundColor = '#f39c12';
   editorToggleBtn.onclick = () => toggleEditorMode(true);
 
-  // 4. Testy (dodajemy przycisk tutaj, żeby był dostępny)
+  // 5. Testy
   const testBtn = document.createElement('button');
   testBtn.textContent = '🧪 Testy';
   testBtn.style.backgroundColor = '#9b59b6';
@@ -56,11 +65,11 @@ export function initControls() {
       runTests(gameTests);
   };
 
-  gameControls.append(undoBtn, resetBtn, editorToggleBtn, testBtn);
+  gameControls.append(undoBtn, resetBtn, rotateBtn, editorToggleBtn, testBtn);
   controlsDiv.appendChild(gameControls);
 
 
-  // --- Panel Edytora (domyślnie ukryty) ---
+  // --- Panel Edytora ---
   const editorControls = document.createElement('div');
   editorControls.id = 'editor-controls';
   editorControls.style.display = 'none';
@@ -116,7 +125,7 @@ export function initControls() {
       gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
       playerToggleBtn.textContent = `Ruch: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
       updateCurrentPlayerDisplay();
-      renderBoard(); // Odśwież panel boczny
+      renderBoard(); // Odśwież
   };
 
   const clearBtn = document.createElement('button');
@@ -157,6 +166,6 @@ function toggleEditorMode(enable) {
         editorCtrls.style.display = 'none';
         updateCurrentPlayerDisplay();
         statusDiv.style.color = 'white';
-        renderBoard(); // Odśwież, by przeliczyć ruchy
+        renderBoard();
     }
 }
