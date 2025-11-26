@@ -43,4 +43,9 @@ body {
   outline: 3px solid yellow;
   cursor: pointer;
 }
+.square.highlight-best-move {
+  outline: 3px solid orange;
+  cursor: pointer;
+}
+
 
