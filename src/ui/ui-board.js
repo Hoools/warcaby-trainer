@@ -5,15 +5,15 @@ import { isValidMove, getPossibleCapturesForPiece, hasAnyCapture } from '../core
 
 let selectedSquare = null;
 let validMovesForSelected = [];
-let pieceLockedForCapture = false; // Czy gracz jest zmuszony kontynuować bicie tym samym pionkiem?
-let pendingCaptures = []; // Lista pionków zbitych w trakcie sekwencji (tzw. "duchy")
+let pieceLockedForCapture = false; 
+let pendingCaptures = []; 
 
 export function initUI() {
   const boardDiv = document.getElementById('board');
   if (!boardDiv) return;
   boardDiv.innerHTML = '';
 
-  let squareNumber = 1; // Licznik dla notacji warcabowej
+  let squareNumber = 1;
 
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
@@ -24,7 +24,7 @@ export function initUI() {
       square.dataset.col = c;
       square.addEventListener('click', () => onSquareClick(r, c));
 
-      // Dodajemy numer tylko na czarnych polach
+      // Numeracja pól (1-50)
       if (isDark) {
           const numberSpan = document.createElement('span');
           numberSpan.className = 'square-number';
@@ -35,6 +35,19 @@ export function initUI() {
       boardDiv.appendChild(square);
     }
   }
+  
+  // Obsługa przycisku kopiowania
+  const copyBtn = document.getElementById('copy-state-btn');
+  if(copyBtn) {
+      copyBtn.onclick = () => {
+          const text = document.getElementById('board-state-output').textContent;
+          navigator.clipboard.writeText(text);
+          const originalText = copyBtn.textContent;
+          copyBtn.textContent = "Skopiowano!";
+          setTimeout(() => copyBtn.textContent = originalText, 1500);
+      };
+  }
+
   updateCurrentPlayerDisplay();
   renderBoard();
 }
@@ -48,7 +61,6 @@ export function updateCurrentPlayerDisplay() {
 }
 
 export function renderBoard() {
-  // Musimy zresetować licznik, żeby wiedzieć jaki numer wstawić (jeśli czyścimy innerHTML)
   let squareNumber = 1;
 
   for (let r = 0; r < 10; r++) {
@@ -59,11 +71,10 @@ export function renderBoard() {
       const isDark = (r + c) % 2 !== 0;
       let currentNum = isDark ? squareNumber++ : null;
 
-      // Czyścimy stare zawartości (pionki)
+      // Czyścimy i przywracamy numer
       square.innerHTML = '';
       square.classList.remove('highlight');
       
-      // Odtwórz numer pola
       if (currentNum !== null) {
           const numberSpan = document.createElement('span');
           numberSpan.className = 'square-number';
@@ -71,41 +82,77 @@ export function renderBoard() {
           square.appendChild(numberSpan);
       }
       
-      // Renderuj pionek
       const pieceCode = gameState.grid[r][c]; 
       if (pieceCode !== 0) {
         const pieceDiv = document.createElement('div');
         pieceDiv.classList.add('piece');
-        
         if (typeof pieceCode === 'string') {
              if (pieceCode.includes('white')) pieceDiv.classList.add('white');
              if (pieceCode.includes('black')) pieceDiv.classList.add('black');
              if (pieceCode.includes('king')) pieceDiv.classList.add('king');
         }
-        
         if (pendingCaptures.some(cap => cap.r === r && cap.c === c)) {
             pieceDiv.style.opacity = '0.4'; 
         }
-
         square.appendChild(pieceDiv);
       }
     }
   }
   highlightValidMoves(validMovesForSelected);
+  updateBoardStateDisplay(); // NOWE: Aktualizacja panelu bocznego
+}
+
+function updateBoardStateDisplay() {
+    const outputDiv = document.getElementById('board-state-output');
+    if (!outputDiv) return;
+
+    const whitePieces = [];
+    const whiteKings = [];
+    const blackPieces = [];
+    const blackKings = [];
+
+    let squareNum = 1;
+    for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 10; c++) {
+            if ((r + c) % 2 !== 0) { // Tylko czarne pola
+                const piece = gameState.grid[r][c];
+                if (piece) {
+                    if (piece === 'white') whitePieces.push(squareNum);
+                    else if (piece === 'white_king') whiteKings.push(squareNum);
+                    else if (piece === 'black') blackPieces.push(squareNum);
+                    else if (piece === 'black_king') blackKings.push(squareNum);
+                }
+                squareNum++;
+            }
+        }
+    }
+
+    const stateText = `Current Player: ${gameState.currentPlayer.toUpperCase()}
+
+WHITE:
+- Men: [${whitePieces.join(', ')}]
+- Kings: [${whiteKings.join(', ')}]
+
+BLACK:
+- Men: [${blackPieces.join(', ')}]
+- Kings: [${blackKings.join(', ')}]
+
+Total: ${whitePieces.length + whiteKings.length + blackPieces.length + blackKings.length}`;
+
+    outputDiv.textContent = stateText;
 }
 
 function onSquareClick(row, col) {
-  // --- LOGIKA EDYTORA ---
+  // Tryb edytora
   if (gameState.isEditorMode) {
-      // Tylko na czarnych polach (tam gdzie gramy)
       if ((row + col) % 2 !== 0) {
           gameState.grid[row][col] = gameState.selectedEditorPiece;
           renderBoard();
       }
-      return; // Kończymy, nie wykonujemy logiki gry
+      return;
   }
 
-  // --- LOGIKA GRY (stara) ---
+  // Tryb gry
   if (pieceLockedForCapture) {
       if (selectedSquare.row === row && selectedSquare.col === col) return;
       const move = validMovesForSelected.find(m => m.toRow === row && m.toCol === col);
@@ -118,7 +165,6 @@ function onSquareClick(row, col) {
   }
 
   const piece = gameState.grid[row][col];
-  // Nie można wybrać pionka, który już został "przeskoczony" w tej turze
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
 
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
@@ -138,19 +184,15 @@ function onSquareClick(row, col) {
   }
 }
 
+// Export funkcji do testów (ważne!)
 export function getValidMovesForPiece(row, col) {
   const player = gameState.currentPlayer;
   const mandatoryCapture = hasAnyCapture(gameState.grid, player);
-  
-  // Pobieramy możliwe bicia, uwzględniając pionki już "przeskoczone" (pendingCaptures)
   const captureMoves = getPossibleCapturesForPiece(gameState.grid, row, col, pendingCaptures);
   
   if (mandatoryCapture) {
-    // Jeśli jest przymus bicia, zwracamy tylko bicia
     return captureMoves.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
   } else {
-    // Jeśli nie ma przymusu, sprawdzamy też ruchy zwykłe
-    // (tylko jeśli captureMoves jest puste - bo jak pionek może bić, to MUSI bić, nawet jeśli inny też może)
     if (captureMoves.length > 0) {
          return captureMoves.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
     }
@@ -159,25 +201,21 @@ export function getValidMovesForPiece(row, col) {
     const piece = gameState.grid[row][col];
     const isKing = piece.includes('king');
     
-    // Skanowanie ruchów prostych
     const directions = isKing 
         ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] 
         : (player === 'white' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]]);
 
     directions.forEach(([dr, dc]) => {
         if (isKing) {
-            // Damka: idzie tak daleko jak może
             let r = row + dr;
             let c = col + dc;
             while (isValidMove(gameState.grid, row, col, r, c, player)) {
                 simpleMoves.push({ toRow: r, toCol: c, isCapture: false });
                 r += dr;
                 c += dc;
-                // Zabezpieczenie przed pętlą (isValidMove sprawdza granice, ale warto mieć break)
                 if (r < 0 || r > 9 || c < 0 || c > 9) break;
             }
         } else {
-            // Zwykły: tylko o 1 pole
             const r = row + dr;
             const c = col + dc;
             if (isValidMove(gameState.grid, row, col, r, c, player)) {
@@ -189,18 +227,14 @@ export function getValidMovesForPiece(row, col) {
   }
 }
 
-// Funkcja pomocnicza: Znajdź pionka pomiędzy A i B (dla damki i zwykłego)
 function findCapturedPieceBetween(r1, c1, r2, c2) {
     const dr = Math.sign(r2 - r1);
     const dc = Math.sign(c2 - c1);
     let r = r1 + dr;
     let c = c1 + dc;
-    
     while (r !== r2 && c !== c2) {
-        if (r < 0 || r > 9 || c < 0 || c > 9) break; // Safety
-        if (gameState.grid[r][c] !== 0) {
-            return { r, c };
-        }
+        if (r < 0 || r > 9 || c < 0 || c > 9) break;
+        if (gameState.grid[r][c] !== 0) return { r, c };
         r += dr;
         c += dc;
     }
@@ -211,64 +245,42 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   const previousBoard = JSON.parse(JSON.stringify(gameState.grid));
   const previousPlayer = gameState.currentPlayer;
 
-  // 1. Przesunięcie pionka na planszy
-  // Zachowujemy typ pionka (np. jeśli damka to damka)
   gameState.grid[toRow][toCol] = gameState.grid[fromRow][fromCol];
   gameState.grid[fromRow][fromCol] = 0;
 
   let moreCapturesAvailable = false;
 
   if (isCapture) {
-    // 2. Znajdź i oznacz zbitego pionka
     const captured = findCapturedPieceBetween(fromRow, fromCol, toRow, toCol);
-    if (captured) {
-        pendingCaptures.push(captured);
-    }
+    if (captured) pendingCaptures.push(captured);
 
-    // 3. Sprawdź czy są DALSZE bicia z nowej pozycji
     const nextCaptures = getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures);
-    
     if (nextCaptures.length > 0) {
       moreCapturesAvailable = true;
       pieceLockedForCapture = true;
-      
-      // Zaktualizuj zaznaczenie na nową pozycję pionka
       selectedSquare = { row: toRow, col: toCol };
       validMovesForSelected = nextCaptures.map(m => ({ toRow: m[0], toCol: m[1], isCapture: true }));
-      
       renderBoard(); 
-      return; // PRZERWIJ funkcję - tura się nie kończy!
+      return;
     }
   }
 
-  // --- KONIEC TURY (jeśli dotarliśmy tutaj, to znaczy że ruch zakończony) ---
-  
-  // 4. Usuń fizycznie wszystkie zbite pionki
   if (pendingCaptures.length > 0) {
-      pendingCaptures.forEach(cap => {
-          gameState.grid[cap.r][cap.c] = 0;
-      });
+      pendingCaptures.forEach(cap => { gameState.grid[cap.r][cap.c] = 0; });
       pendingCaptures = [];
   }
 
-  // 5. Promocja na damkę
   const piece = gameState.grid[toRow][toCol];
   if (piece && !piece.includes('king')) {
-      if (gameState.currentPlayer === 'white' && toRow === 0) {
-          gameState.grid[toRow][toCol] = 'white_king';
-      }
-      if (gameState.currentPlayer === 'black' && toRow === 9) {
-          gameState.grid[toRow][toCol] = 'black_king';
-      }
+      if (gameState.currentPlayer === 'white' && toRow === 0) gameState.grid[toRow][toCol] = 'white_king';
+      if (gameState.currentPlayer === 'black' && toRow === 9) gameState.grid[toRow][toCol] = 'black_king';
   }
 
-  // 6. Zmiana gracza i czyszczenie stanu UI
   gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
   pieceLockedForCapture = false;
   selectedSquare = null;
   validMovesForSelected = [];
   
-  // 7. Historia i odświeżenie
   moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard, previousPlayer });
   updateCurrentPlayerDisplay();
   renderBoard();

@@ -4,16 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Warcaby Trainer</title>
-    <link rel="stylesheet" href="src/assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
     <div id="game-container">
-        <div id="status">Na ruchu: white</div>
-        <div id="board"></div>
-        <div id="controls"></div>
+        <!-- Lewa kolumna: Gra -->
+        <div id="main-column">
+            <div id="status">Na ruchu: white</div>
+            <div id="board"></div>
+            <div id="controls"></div>
+        </div>
+
+        <!-- Prawa kolumna: Stan dla AI -->
+        <div id="side-panel">
+            <h3>Stan Planszy (AI View)</h3>
+            <div id="board-state-output">Oczekiwanie na ruch...</div>
+            <button id="copy-state-btn">Kopiuj stan</button>
+        </div>
     </div>
 
-    <!-- Pointing to src/main.js is critical -->
     <script type="module" src="./src/main.js"></script>
 </body>
 </html>

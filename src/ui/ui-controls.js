@@ -32,7 +32,6 @@ export function initControls() {
     initUI();
   };
 
-  // Przełącznik na tryb edycji
   const editorToggleBtn = document.createElement('button');
   editorToggleBtn.textContent = '🔧 Tryb Edycji';
   editorToggleBtn.style.backgroundColor = '#f39c12';
@@ -42,17 +41,23 @@ export function initControls() {
   controlsDiv.appendChild(gameControls);
 
 
-  // --- Sekcja Edytora (domyślnie ukryta) ---
+  // --- Sekcja Edytora ---
   const editorControls = document.createElement('div');
   editorControls.id = 'editor-controls';
   editorControls.style.display = 'none';
+  editorControls.style.flexDirection = 'column'; // Zmiana na kolumnę dla lepszego układu
   editorControls.style.gap = '10px';
   editorControls.style.marginTop = '10px';
   editorControls.style.padding = '10px';
   editorControls.style.background = 'rgba(0,0,0,0.2)';
   editorControls.style.borderRadius = '8px';
 
-  // Narzędzia: Biały, Czarny, Biała Damka, Czarna Damka, Gumka
+  // 1. Narzędzia (Pionki)
+  const toolsContainer = document.createElement('div');
+  toolsContainer.style.display = 'flex';
+  toolsContainer.style.gap = '5px';
+  toolsContainer.style.flexWrap = 'wrap';
+
   const tools = [
       { name: 'Biały', value: 'white', color: '#fff', textColor: '#000' },
       { name: 'Czarny', value: 'black', color: '#333', textColor: '#fff' },
@@ -67,29 +72,51 @@ export function initControls() {
       btn.style.backgroundColor = tool.color;
       btn.style.color = tool.textColor;
       btn.style.border = '2px solid transparent';
-      
       btn.onclick = () => {
           gameState.selectedEditorPiece = tool.value;
-          // Odznacz inne
-          editorControls.querySelectorAll('button').forEach(b => b.style.borderColor = 'transparent');
-          btn.style.borderColor = '#3498db'; // Zaznaczenie
+          toolsContainer.querySelectorAll('button').forEach(b => b.style.borderColor = 'transparent');
+          btn.style.borderColor = '#3498db'; 
       };
-      editorControls.appendChild(btn);
+      toolsContainer.appendChild(btn);
   });
+  editorControls.appendChild(toolsContainer);
 
-  // Przycisk "Wyczyść planszę"
+  // 2. Ustawienia stanu (NOWE: Wybór gracza na ruchu)
+  const settingsContainer = document.createElement('div');
+  settingsContainer.style.display = 'flex';
+  settingsContainer.style.gap = '10px';
+  settingsContainer.style.alignItems = 'center';
+
+  // Przełącznik gracza
+  const playerToggleBtn = document.createElement('button');
+  playerToggleBtn.id = 'editor-player-toggle';
+  playerToggleBtn.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
+  playerToggleBtn.style.backgroundColor = '#8e44ad';
+  playerToggleBtn.onclick = () => {
+      // Zmień gracza w gameState
+      gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+      // Zaktualizuj napis na przycisku
+      playerToggleBtn.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
+      // Zaktualizuj też główny wyświetlacz
+      updateCurrentPlayerDisplay();
+  };
+  settingsContainer.appendChild(playerToggleBtn);
+
   const clearBtn = document.createElement('button');
   clearBtn.textContent = '🗑️ Wyczyść';
   clearBtn.onclick = () => {
       clearBoard();
       renderBoard();
   };
-  editorControls.appendChild(clearBtn);
+  settingsContainer.appendChild(clearBtn);
 
-  // Przycisk "Graj" (wyjście z edytora)
+  editorControls.appendChild(settingsContainer);
+
+  // 3. Wyjście
   const playBtn = document.createElement('button');
-  playBtn.textContent = '▶️ Graj';
+  playBtn.textContent = '▶️ Graj (Zatwierdź)';
   playBtn.style.backgroundColor = '#2ecc71';
+  playBtn.style.marginTop = '5px';
   playBtn.onclick = () => toggleEditorMode(false);
   editorControls.appendChild(playBtn);
 
@@ -98,7 +125,6 @@ export function initControls() {
 
 function toggleEditorMode(enable) {
     gameState.isEditorMode = enable;
-    
     const gameCtrls = document.getElementById('game-controls');
     const editorCtrls = document.getElementById('editor-controls');
     const statusDiv = document.getElementById('status');
@@ -106,11 +132,15 @@ function toggleEditorMode(enable) {
     if (enable) {
         gameCtrls.style.display = 'none';
         editorCtrls.style.display = 'flex';
-        editorCtrls.style.flexWrap = 'wrap';
-        statusDiv.textContent = "TRYB EDYCJI: Kliknij pola, aby ustawić pionki";
+        statusDiv.textContent = "TRYB EDYCJI";
         statusDiv.style.color = '#f39c12';
+        
+        // Odśwież przycisk gracza przy wejściu, by zgadzał się ze stanem
+        const playerBtn = document.getElementById('editor-player-toggle');
+        if(playerBtn) playerBtn.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`;
+
     } else {
-        gameCtrls.style.display = 'flex'; // lub block/flex
+        gameCtrls.style.display = 'flex';
         editorCtrls.style.display = 'none';
         updateCurrentPlayerDisplay();
         statusDiv.style.color = 'white';
