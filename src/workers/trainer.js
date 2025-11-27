@@ -1,7 +1,7 @@
 importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js');
 
 let model = null;
-const MODEL_PATH = 'indexeddb://checkers-pro-v1'; // Zmiana ścieżki
+const MODEL_PATH = 'indexeddb://checkers-pro-v1'; 
 
 self.onmessage = async (e) => {
     const { command } = e.data;
@@ -12,10 +12,10 @@ self.onmessage = async (e) => {
 
 async function trainLoop() {
     try {
-        // Próbujemy załadować z IndexedDB
         model = await tf.loadLayersModel(MODEL_PATH);
+        // WAŻNE: Po załadowaniu trzeba skompilować, aby działało model.fit()
+        model.compile({optimizer: tf.train.adam(0.001), loss: 'meanSquaredError'});
     } catch (e) {
-        // Fallback: nowy model
         model = tf.sequential();
         model.add(tf.layers.conv2d({inputShape: [10, 10, 4], filters: 64, kernelSize: 3, activation: 'relu', padding: 'same'}));
         model.add(tf.layers.conv2d({filters: 64, kernelSize: 3, activation: 'relu', padding: 'same'}));
@@ -28,7 +28,7 @@ async function trainLoop() {
         model.compile({optimizer: tf.train.adam(0.001), loss: 'meanSquaredError'});
     }
 
-    const TOTAL_GAMES = 5;
+    const TOTAL_GAMES = 50;
     let gamesPlayed = 0;
     
     self.postMessage({ type: 'STATUS', msg: 'Trening rozpoczęty (Self-Play)...' });
@@ -41,7 +41,6 @@ async function trainLoop() {
 
     self.postMessage({ type: 'STATUS', msg: 'Przesyłanie modelu...' });
     
-    // Wysyłamy artefakty do UI (bez zmian tutaj)
     await model.save(tf.io.withSaveHandler(async (artifacts) => {
         self.postMessage({ 
             type: 'SAVE_MODEL_DATA', 
