@@ -49,6 +49,7 @@ export function renderBoard() {
   }
   validMovesForSelected.forEach(m => document.querySelector(`#board .square[data-row='${m.toRow}'][data-col='${m.toCol}']`)?.classList.add('highlight'));
   applyBoardRotation();
+  updateBoardStateDebug(); 
 }
 
 function onSquareClick(row, col) {
@@ -152,4 +153,45 @@ async function continueAiJumpChain() {
             await continueAiJumpChain();
         }
     }
+}
+
+function updateBoardStateDebug() {
+    const output = document.getElementById('board-state-output');
+    if (!output) return;
+
+    let text = `--- STAN GRY ---\n`;
+    text += `Na ruchu: ${gameState.currentPlayer}\n`;
+    text += `Aktywna gra: ${gameState.gameActive}\n\n`;
+    
+    // Rysowanie prostej mapy ASCII
+    text += "  0 1 2 3 4 5 6 7 8 9\n";
+    for (let r = 0; r < 10; r++) {
+        text += r + " ";
+        for (let c = 0; c < 10; c++) {
+            const p = gameState.grid[r][c];
+            if (p === 0) text += ". ";
+            else if (p.startsWith('white')) text += p.includes('king') ? "W " : "w ";
+            else if (p.startsWith('black')) text += p.includes('king') ? "B " : "b ";
+        }
+        text += "\n";
+    }
+
+    // Lista pionków (FEN-like)
+    text += "\n--- POZYCJE ---\nBiałe: ";
+    const whites = [];
+    const blacks = [];
+    
+    for(let r=0; r<10; r++) for(let c=0; c<10; c++) {
+        const p = gameState.grid[r][c];
+        if(p && typeof p === 'string') {
+            // Konwersja na numerację 1-50
+            const fieldNum = (r * 5) + Math.floor(c/2) + 1; 
+            if(p.startsWith('white')) whites.push(fieldNum + (p.includes('king') ? '(D)' : ''));
+            if(p.startsWith('black')) blacks.push(fieldNum + (p.includes('king') ? '(D)' : ''));
+        }
+    }
+    text += whites.join(', ') + "\n";
+    text += "Czarne: " + blacks.join(', ');
+
+    output.textContent = text;
 }
