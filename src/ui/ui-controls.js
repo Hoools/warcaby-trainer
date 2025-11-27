@@ -250,16 +250,5 @@ function startGame(color) {
     applyBoardRotation();
     renderBoard();
 
-    // Jeśli gracz wybrał czarne, komputer (białe) musi wykonać pierwszy ruch
-    if (color === 'black' && gameState.aiEnabled) {
-        setTimeout(() => {
-             // Import dynamiczny lub wywołanie funkcji z ui-board.js przez event/global
-             // Najprościej: wywołajmy kliknięcie na planszy lub logikę AI
-             // Ale ponieważ initControls nie ma dostępu do performAiMove bezpośrednio (cykl zależnosci),
-             // musimy to obsłużyć w ui-board lub main.
-             
-             // Hack: Wymuszenie ruchu w ui-board poprzez reload lub flagę
-             // Lepiej: main.js to obsłuży, albo wywołamy event
-        }, 500);
-    }
+    document.dispatchEvent(new CustomEvent('gameStateChanged'));
 }

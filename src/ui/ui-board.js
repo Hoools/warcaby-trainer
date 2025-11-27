@@ -22,10 +22,20 @@ export function initUI() {
   applyBoardRotation(); 
   renderBoard();
 
-  // Jeśli gra zaczyna się turą AI
-  if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor) {
-      setTimeout(() => performAiMove(), 1000);
-  }
+  // Jeśli gra zaczyna się turą AI (inicjalnie)
+  checkAiTurn();
+
+  // NOWE: Nasłuchuj na reset gry z ui-controls
+  document.addEventListener('gameStateChanged', () => {
+      checkAiTurn();
+  });
+}
+
+function checkAiTurn() {
+    if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor) {
+        // Opóźnienie dla naturalności
+        setTimeout(() => performAiMove(), 1000);
+    }
 }
 
 export function updateCurrentPlayerDisplay() { const s = document.getElementById('status'); if (s) s.textContent = `Na ruchu: ${gameState.currentPlayer === 'white' ? 'Białe' : 'Czarne'}`; }
