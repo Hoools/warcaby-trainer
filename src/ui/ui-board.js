@@ -22,18 +22,20 @@ export function initUI() {
   applyBoardRotation(); 
   renderBoard();
 
-  // Jeśli gra zaczyna się turą AI (inicjalnie)
   checkAiTurn();
 
-  // NOWE: Nasłuchuj na reset gry z ui-controls
-  document.addEventListener('gameStateChanged', () => {
-      checkAiTurn();
+  document.addEventListener('gameStateChanged', () => checkAiTurn());
+  
+  document.addEventListener('forceMove', (e) => {
+      const m = e.detail;
+      if (gameState.gameActive) {
+          makeMove(m.fromRow, m.fromCol, m.toRow, m.toCol, m.isCapture);
+      }
   });
 }
 
 function checkAiTurn() {
     if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor) {
-        // Opóźnienie dla naturalności
         setTimeout(() => performAiMove(), 1000);
     }
 }
@@ -59,7 +61,6 @@ export function renderBoard() {
       }
   }
   validMovesForSelected.forEach(m => document.querySelector(`#board .square[data-row='${m.toRow}'][data-col='${m.toCol}']`)?.classList.add('highlight'));
-  
   if (typeof updateBoardStateDebug === 'function') updateBoardStateDebug();
   applyBoardRotation();
 }
@@ -82,9 +83,7 @@ function updateBoardStateDebug() {
 }
 
 function onSquareClick(row, col) {
-  // Blokada klikania TYLKO jeśli AI jest włączone i to jego tura
   if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor) return;
-
   if (gameState.isEditorMode) { if ((row + col) % 2 !== 0) { gameState.grid[row][col] = gameState.selectedEditorPiece; renderBoard(); } return; }
   if (pieceLockedForCapture) {
       if (selectedSquare.row === row && selectedSquare.col === col) return;
@@ -94,8 +93,6 @@ function onSquareClick(row, col) {
   }
   const piece = gameState.grid[row][col];
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
-  
-  // Pozwalamy klikać w bierki aktualnego gracza (niezależnie czy to człowiek czy komputer w trybie manualnym)
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     const moves = getValidMoves(gameState.grid, row, col, gameState.currentPlayer, pendingCaptures);
     selectedSquare = { row, col }; validMovesForSelected = moves; renderBoard(); 
@@ -113,7 +110,6 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   if (isCapture) {
     const cap = findCapturedPieceBetween(gameState.grid, fromRow, fromCol, toRow, toCol);
     if (cap) pendingCaptures.push(cap);
-    
     if (getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures).length > 0 && getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures).length > 0) {
           pieceLockedForCapture = true; selectedSquare = { row: toRow, col: toCol }; validMovesForSelected = getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures); renderBoard(); return;
     }
@@ -138,8 +134,6 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
       gameState.gameActive = false;
       return;
   }
-
-  // Trigger AI tylko jeśli włączone
   if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor && !pieceLockedForCapture) {
       setTimeout(() => performAiMove(), 500);
   }

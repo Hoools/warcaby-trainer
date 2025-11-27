@@ -20,18 +20,16 @@ export function initEvaluationUI() {
 export function updateEvaluationDisplay(board, player) {
     if (!isAnalysisEnabled) return;
 
-    // Ukryj ocenę, jeśli to tura przeciwnika i AI gra (nie chcemy spoilerów/rozpraszania)
     if (gameState.aiEnabled && player !== gameState.playerColor) {
         const list = document.getElementById('topMovesList');
         const score = document.getElementById('evalScore');
-        if(list) list.innerHTML = '<div class="move-item">Analiza przeciwnika...</div>';
+        if(list) list.innerHTML = '<div class="move-item">Ruch przeciwnika...</div>';
         if(score) score.innerText = '...';
         return;
     }
 
     setTimeout(() => {
-        // Depth 7 dla lepszej jakości porad
-        const data = getBestMoveWithEvaluation(board, player, 7);
+        const data = getBestMoveWithEvaluation(board, player, 8); // Depth 8
         updateBar(data.evaluation);
         updateTopMoves(data.topMoves);
     }, 50);
@@ -46,10 +44,18 @@ function updateBar(evalData) {
 
     if (!scoreEl || !whiteBar) return;
 
-    const scoreNum = (evalData.score / 100).toFixed(2);
-    const sign = evalData.score > 0 ? '+' : '';
+    let displayScore = evalData.score;
+    // W konwencji szachowej: + zawsze oznacza przewagę Białych, - Czarnych.
+    // Jeśli 'player' to black, a 'score' jest dodatni (czyli dobrze dla black),
+    // to w notacji absolutnej powinien być ujemny.
+    if (evalData.player === 'black') {
+        displayScore = -displayScore;
+    }
+
+    const scoreNum = (displayScore / 100).toFixed(2);
+    const sign = displayScore > 0 ? '+' : '';
     scoreEl.textContent = `${sign}${scoreNum}`;
-    scoreEl.style.color = evalData.score > 0 ? '#4a9eff' : '#ff4444';
+    scoreEl.style.color = displayScore > 0 ? '#fff' : '#aaa'; // Neutralny kolor
 
     let wp = evalData.winPercent;
     let whiteChance = evalData.player === 'white' ? wp : (100 - wp);
@@ -75,9 +81,30 @@ function updateTopMoves(moves) {
         const div = document.createElement('div');
         div.className = 'move-item';
         if (index === 0) div.classList.add('best');
+        
+        div.style.cursor = 'pointer';
+        div.title = "Kliknij, aby wykonać ten ruch";
+        div.addEventListener('mouseover', () => div.style.background = '#34495e');
+        div.addEventListener('mouseout', () => div.style.background = index === 0 ? '#1a2a1a' : '#1a1a1a');
 
-        const scoreDisplay = (m.score / 100).toFixed(2);
-        const sign = m.score > 0 ? '+' : '';
+        div.addEventListener('click', () => {
+            const event = new CustomEvent('forceMove', { 
+                detail: { ...m.move } 
+            });
+            document.dispatchEvent(event);
+        });
+
+        // Korekta wyświetlania +/-
+        let displayScore = m.score;
+        // Jeśli oceniamy ruchy czarnych, wynik dodatni = dobrze dla czarnych = minus w notacji.
+        // Ale uwaga: getBestMoveWithEvaluation zwraca score relatywny do gracza.
+        // Musimy sprawdzić, czyja to tura.
+        if (gameState.currentPlayer === 'black') {
+            displayScore = -displayScore;
+        }
+
+        const scoreDisplay = (displayScore / 100).toFixed(2);
+        const sign = displayScore > 0 ? '+' : '';
         
         let winRateClass = 'neutral';
         if (m.winPercent > 60) winRateClass = 'good';
@@ -86,7 +113,7 @@ function updateTopMoves(moves) {
         div.innerHTML = `
             <span class="move-notation">${index + 1}. <strong>${m.notation}</strong></span>
             <div class="move-eval">
-                <span class="move-score" style="color: ${m.score > 0 ? '#4a9eff' : '#ff6b6b'}">${sign}${scoreDisplay}</span>
+                <span class="move-score" style="color: ${displayScore > 0 ? '#4a9eff' : '#ff6b6b'}">${sign}${scoreDisplay}</span>
                 <span class="move-winrate ${winRateClass}">${Math.round(m.winPercent)}%</span>
             </div>
         `;

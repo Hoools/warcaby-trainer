@@ -1,7 +1,7 @@
 import { getAllMovesForPlayer, findCapturedPieceBetween, getPossibleCaptures, calculateMaxCaptures } from './rules.js';
 
 // ===========================
-// ZAAWANSOWANY SILNIK AI (V3 - QUIESCENCE SEARCH)
+// STABILNY SILNIK AI (CLEAN VERSION)
 // ===========================
 
 const SCORES = {
@@ -12,8 +12,7 @@ const SCORES = {
     EDGE_SAFETY: 6,
     BACK_ROW: 12,
     PROMOTION_BONUS: 15,
-    ADVANCED_POSITION: 3,
-    CAPTURE_CHAIN: 50
+    ADVANCED_POSITION: 3
 };
 
 const TRANSPOSITION_TABLE = new Map();
@@ -28,14 +27,14 @@ function boardHash(board, player) {
     return hash;
 }
 
-export function getBestMove(board, player, depth = 7) {
+export function getBestMove(board, player, depth = 5) {
     TRANSPOSITION_TABLE.clear();
     const boardCopy = JSON.parse(JSON.stringify(board));
     const result = minimax(boardCopy, depth, -Infinity, Infinity, true, player);
     return result.move;
 }
 
-export function getBestMoveWithEvaluation(board, player, depth = 6) {
+export function getBestMoveWithEvaluation(board, player, depth = 5) {
     TRANSPOSITION_TABLE.clear();
     const validMoves = getAllMovesForPlayer(board, player);
 
@@ -49,10 +48,12 @@ export function getBestMoveWithEvaluation(board, player, depth = 6) {
 
     const moveEvaluations = validMoves.map(move => {
         const newBoard = simulateCompleteMove(board, move, player);
-        const searchDepth = Math.max(1, depth - 2);
-        // Perspektywa: my zrobiliśmy ruch, teraz minimalizujemy wynik przeciwnika
+        // Używamy pełnej głębokości (lub depth-1 dla szybkości)
+        const searchDepth = Math.max(1, depth);
+        
+        // Minimalizujemy wynik przeciwnika
         const evalResult = minimax(newBoard, searchDepth, -Infinity, Infinity, false, player);
-
+        
         return {
             move: move,
             score: evalResult.score,
@@ -81,42 +82,33 @@ function getMoveNotation(move) {
     return `${from}-${to}`;
 }
 
-// Główna pętla Minimax
 function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
-    const opponentColor = playerColor === 'white' ? 'black' : 'white';
-    const currentPlayer = isMaximizing ? playerColor : opponentColor;
-    
-    // 1. Transposition Table Lookup
-    const hash = boardHash(board, currentPlayer);
+    const hash = boardHash(board, isMaximizing ? playerColor : (playerColor === 'white' ? 'black' : 'white'));
     if (TRANSPOSITION_TABLE.has(hash)) {
         const cached = TRANSPOSITION_TABLE.get(hash);
         if (cached.depth >= depth) return cached;
     }
 
-    // 2. Warunek końcowy (liść drzewa) -> uruchom Quiescence Search
-    if (depth === 0) {
-        // Zamiast zwracać statyczną ocenę, sprawdzamy "wyciszenie" pozycji
-        const score = quiescence(board, alpha, beta, isMaximizing, playerColor);
-        return { score, move: null, depth: 0 };
-    }
-
+    const opponentColor = playerColor === 'white' ? 'black' : 'white';
+    const currentPlayer = isMaximizing ? playerColor : opponentColor;
     const validMoves = getAllMovesForPlayer(board, currentPlayer);
-    if (validMoves.length === 0) {
-        // Brak ruchów = przegrana
-        const score = isMaximizing ? -10000 : 10000; 
+
+    // Koniec rekurencji lub brak ruchów
+    if (depth === 0 || validMoves.length === 0) {
+        let score = evaluateBoard(board, playerColor);
+        // Jeśli brak ruchów, to przegrana/wygrana
+        if (validMoves.length === 0) {
+            score = isMaximizing ? -10000 : 10000; 
+        }
         return { score, move: null, depth: 0 };
     }
 
     sortMoves(validMoves, board, currentPlayer);
-
-    // Pruning (przycinanie) słabych gałęzi na dużej głębokości
-    const movesToSearch = depth > 4 ? validMoves.filter(m => m.isCapture).concat(validMoves.filter(m => !m.isCapture).slice(0, 8)) : validMoves;
-
-    let bestMove = movesToSearch[0];
+    let bestMove = validMoves[0];
 
     if (isMaximizing) {
         let maxEval = -Infinity;
-        for (const move of movesToSearch) {
+        for (const move of validMoves) {
             const newBoard = simulateCompleteMove(board, move, currentPlayer);
             const evalResult = minimax(newBoard, depth - 1, alpha, beta, false, playerColor);
             if (evalResult.score > maxEval) { maxEval = evalResult.score; bestMove = move; }
@@ -128,7 +120,7 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
         return result;
     } else {
         let minEval = Infinity;
-        for (const move of movesToSearch) {
+        for (const move of validMoves) {
             const newBoard = simulateCompleteMove(board, move, currentPlayer);
             const evalResult = minimax(newBoard, depth - 1, alpha, beta, true, playerColor);
             if (evalResult.score < minEval) { minEval = evalResult.score; bestMove = move; }
@@ -141,66 +133,12 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
     }
 }
 
-// --- NOWOŚĆ: Quiescence Search ---
-// Przeszukuje tylko bicia, aby uniknąć efektu horyzontu
-function quiescence(board, alpha, beta, isMaximizing, playerColor) {
-    // 1. Ocena statyczna "na stojąco"
-    const standPat = evaluateBoard(board, playerColor);
-    
-    // Jeśli jesteśmy zadowoleni z obecnego stanu, może nie musimy bić dalej (tzw. soft pruning)
-    if (isMaximizing) {
-        if (standPat >= beta) return beta;
-        if (alpha < standPat) alpha = standPat;
-    } else {
-        if (standPat <= alpha) return alpha;
-        if (beta > standPat) beta = standPat;
-    }
-
-    const opponentColor = playerColor === 'white' ? 'black' : 'white';
-    const currentPlayer = isMaximizing ? playerColor : opponentColor;
-    
-    // Pobieramy WSZYSTKIE ruchy
-    const allMoves = getAllMovesForPlayer(board, currentPlayer);
-    
-    // Interesują nas TYLKO bicia (isCapture)
-    const captureMoves = allMoves.filter(m => m.isCapture);
-
-    // Jeśli nie ma bić, pozycja jest "cicha" -> zwracamy ocenę statyczną
-    if (captureMoves.length === 0) {
-        return standPat;
-    }
-
-    sortMoves(captureMoves, board, currentPlayer);
-
-    if (isMaximizing) {
-        let maxEval = standPat;
-        for (const move of captureMoves) {
-            const newBoard = simulateCompleteMove(board, move, currentPlayer);
-            const score = quiescence(newBoard, alpha, beta, false, playerColor);
-            if (score > maxEval) maxEval = score;
-            alpha = Math.max(alpha, score);
-            if (beta <= alpha) break;
-        }
-        return maxEval;
-    } else {
-        let minEval = standPat;
-        for (const move of captureMoves) {
-            const newBoard = simulateCompleteMove(board, move, currentPlayer);
-            const score = quiescence(newBoard, alpha, beta, true, playerColor);
-            if (score < minEval) minEval = score;
-            beta = Math.min(beta, score);
-            if (beta <= alpha) break;
-        }
-        return minEval;
-    }
-}
-
 function sortMoves(moves, board, player) {
     moves.forEach(move => {
         move.priority = 0;
         if (move.isCapture) {
-            move.priority += 10000;
-            move.priority += calculateMaxCaptures(board, move.fromRow, move.fromCol, board[move.fromRow][move.fromCol], []) * 100;
+            move.priority += 1000;
+            if (move.totalVal) move.priority += move.totalVal * 200;
         }
         if ((player === 'white' && move.toRow === 0) || (player === 'black' && move.toRow === 9)) move.priority += 500;
         const piece = board[move.fromRow][move.fromCol];
@@ -225,13 +163,15 @@ function evaluateBoard(board, playerColor) {
 
             let value = p.includes('king') ? SCORES.KING : SCORES.PAWN;
             const centerDist = Math.abs(4.5 - r) + Math.abs(4.5 - c);
-            if (centerDist <= 2) value += SCORES.CENTER_CONTROL;
+            if (centerDist <= 3) value += SCORES.CENTER_CONTROL;
             if (c === 0 || c === 9) value += SCORES.EDGE_SAFETY;
+            if ((playerColor === 'white' && r === 9 && isMe) || (playerColor === 'black' && r === 0 && isMe)) value += SCORES.BACK_ROW;
+
             if (!p.includes('king')) {
-                const advanceRow = p.startsWith('white') ? (9 - r) : r;
-                value += advanceRow * SCORES.ADVANCED_POSITION;
-                if (advanceRow >= 7) value += SCORES.PROMOTION_BONUS;
+                if (p.startsWith('white')) value += (9 - r) * SCORES.ADVANCED_POSITION + (r <= 2 ? SCORES.PROMOTION_BONUS : 0);
+                else value += r * SCORES.ADVANCED_POSITION + (r >= 7 ? SCORES.PROMOTION_BONUS : 0);
             }
+
             if (isMe) score += value; else score -= value;
         }
     }
@@ -283,7 +223,7 @@ function checkPromotion(board, r, c) {
 }
 
 export function scoreToWinPercentage(score, player) {
-    const SCALE = 300;
+    const SCALE = 200;
     const winProb = 100 / (1 + Math.exp(-score / SCALE));
     return Math.max(0, Math.min(100, winProb));
 }
