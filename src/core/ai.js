@@ -1,18 +1,20 @@
 import { getAllMovesForPlayer, findCapturedPieceBetween, getPossibleCaptures, calculateMaxCaptures } from './rules.js';
+import { predictBoard } from './neuralNet.js';
 
 // ===========================
-// STABILNY SILNIK AI (CLEAN VERSION)
+// HYBRYDOWY SILNIK AI (Minimax + Neural Net)
 // ===========================
 
 const SCORES = {
     PAWN: 100,
     KING: 300,
     MOBILITY: 5,
-    CENTER_CONTROL: 8,
-    EDGE_SAFETY: 6,
-    BACK_ROW: 12,
-    PROMOTION_BONUS: 15,
-    ADVANCED_POSITION: 3
+    CENTER_CONTROL: 10,
+    EDGE_SAFETY: 8,
+    BACK_ROW: 15,
+    PROMOTION_BONUS: 20,
+    CAPTURE_CHAIN: 50,
+    GROUP_BONUS: 3
 };
 
 const TRANSPOSITION_TABLE = new Map();
@@ -27,37 +29,41 @@ function boardHash(board, player) {
     return hash;
 }
 
-export function getBestMove(board, player, depth = 5) {
+export function getBestMove(board, player, depth = 8) {
     TRANSPOSITION_TABLE.clear();
     const boardCopy = JSON.parse(JSON.stringify(board));
     const result = minimax(boardCopy, depth, -Infinity, Infinity, true, player);
     return result.move;
 }
 
-export function getBestMoveWithEvaluation(board, player, depth = 5) {
+export function getBestMoveWithEvaluation(board, player, depth = 7) {
     TRANSPOSITION_TABLE.clear();
     const validMoves = getAllMovesForPlayer(board, player);
 
     if (validMoves.length === 0) {
         return { 
             bestMove: null, 
-            evaluation: { score: -10000, winPercent: 0, player }, 
+            evaluation: { score: -20000, winPercent: 0, player }, 
             topMoves: [] 
         };
     }
 
     const moveEvaluations = validMoves.map(move => {
         const newBoard = simulateCompleteMove(board, move, player);
-        // Używamy pełnej głębokości (lub depth-1 dla szybkości)
-        const searchDepth = Math.max(1, depth);
         
-        // Minimalizujemy wynik przeciwnika
+        // Optymalizacja: Płytsze przeszukiwanie dla panelu
+        const searchDepth = Math.max(1, depth - 2);
+        
         const evalResult = minimax(newBoard, searchDepth, -Infinity, Infinity, false, player);
         
+        let safeScore = evalResult.score;
+        if (safeScore === Infinity) safeScore = 15000;
+        if (safeScore === -Infinity) safeScore = -15000;
+
         return {
             move: move,
-            score: evalResult.score,
-            winPercent: scoreToWinPercentage(evalResult.score, player),
+            score: safeScore,
+            winPercent: scoreToWinPercentage(safeScore, player),
             notation: getMoveNotation(move)
         };
     });
@@ -89,26 +95,30 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
         if (cached.depth >= depth) return cached;
     }
 
+    // Jeśli depth 0, używamy hybrydowej oceny (Sieć + Klasyka)
+    if (depth === 0) {
+        const score = evaluateBoard(board, playerColor); 
+        return { score, move: null, depth: 0 };
+    }
+
     const opponentColor = playerColor === 'white' ? 'black' : 'white';
     const currentPlayer = isMaximizing ? playerColor : opponentColor;
     const validMoves = getAllMovesForPlayer(board, currentPlayer);
 
-    // Koniec rekurencji lub brak ruchów
-    if (depth === 0 || validMoves.length === 0) {
-        let score = evaluateBoard(board, playerColor);
-        // Jeśli brak ruchów, to przegrana/wygrana
-        if (validMoves.length === 0) {
-            score = isMaximizing ? -10000 : 10000; 
-        }
+    if (validMoves.length === 0) {
+        const score = isMaximizing ? -15000 : 15000;
         return { score, move: null, depth: 0 };
     }
 
     sortMoves(validMoves, board, currentPlayer);
-    let bestMove = validMoves[0];
+    const movesToSearch = depth > 4 ? validMoves.filter(m => m.isCapture).concat(validMoves.filter(m => !m.isCapture).slice(0, 8)) : validMoves;
+    const finalMoves = movesToSearch.length > 0 ? movesToSearch : validMoves;
+
+    let bestMove = finalMoves[0];
 
     if (isMaximizing) {
         let maxEval = -Infinity;
-        for (const move of validMoves) {
+        for (const move of finalMoves) {
             const newBoard = simulateCompleteMove(board, move, currentPlayer);
             const evalResult = minimax(newBoard, depth - 1, alpha, beta, false, playerColor);
             if (evalResult.score > maxEval) { maxEval = evalResult.score; bestMove = move; }
@@ -120,7 +130,7 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
         return result;
     } else {
         let minEval = Infinity;
-        for (const move of validMoves) {
+        for (const move of finalMoves) {
             const newBoard = simulateCompleteMove(board, move, currentPlayer);
             const evalResult = minimax(newBoard, depth - 1, alpha, beta, true, playerColor);
             if (evalResult.score < minEval) { minEval = evalResult.score; bestMove = move; }
@@ -137,19 +147,20 @@ function sortMoves(moves, board, player) {
     moves.forEach(move => {
         move.priority = 0;
         if (move.isCapture) {
-            move.priority += 1000;
-            if (move.totalVal) move.priority += move.totalVal * 200;
+            move.priority += 10000;
+            move.priority += calculateMaxCaptures(board, move.fromRow, move.fromCol, board[move.fromRow][move.fromCol], []) * 100;
         }
         if ((player === 'white' && move.toRow === 0) || (player === 'black' && move.toRow === 9)) move.priority += 500;
         const piece = board[move.fromRow][move.fromCol];
         if (piece && piece.includes('king')) move.priority += 200;
         const centerDist = Math.abs(4.5 - move.toRow) + Math.abs(4.5 - move.toCol);
-        move.priority += (20 - centerDist) * 5;
+        move.priority += (15 - centerDist) * 10;
     });
     moves.sort((a, b) => b.priority - a.priority);
 }
 
 function evaluateBoard(board, playerColor) {
+    // --- 1. KLASYCZNA OCENA ---
     let score = 0;
     const opponentColor = playerColor === 'white' ? 'black' : 'white';
 
@@ -163,19 +174,37 @@ function evaluateBoard(board, playerColor) {
 
             let value = p.includes('king') ? SCORES.KING : SCORES.PAWN;
             const centerDist = Math.abs(4.5 - r) + Math.abs(4.5 - c);
-            if (centerDist <= 3) value += SCORES.CENTER_CONTROL;
+            if (centerDist <= 2) value += SCORES.CENTER_CONTROL;
             if (c === 0 || c === 9) value += SCORES.EDGE_SAFETY;
-            if ((playerColor === 'white' && r === 9 && isMe) || (playerColor === 'black' && r === 0 && isMe)) value += SCORES.BACK_ROW;
-
-            if (!p.includes('king')) {
-                if (p.startsWith('white')) value += (9 - r) * SCORES.ADVANCED_POSITION + (r <= 2 ? SCORES.PROMOTION_BONUS : 0);
-                else value += r * SCORES.ADVANCED_POSITION + (r >= 7 ? SCORES.PROMOTION_BONUS : 0);
+            if ((isMe && ((playerColor === 'white' && r === 9) || (playerColor === 'black' && r === 0)))) {
+                value += SCORES.BACK_ROW;
             }
-
+            if (!p.includes('king')) {
+                const advanceRow = p.startsWith('white') ? (9 - r) : r;
+                value += advanceRow * SCORES.ADVANCED_POSITION;
+                if (advanceRow >= 7) value += SCORES.PROMOTION_BONUS;
+                
+                // Group bonus
+                const supportRow = p.startsWith('white') ? r + 1 : r - 1;
+                if (supportRow >= 0 && supportRow < 10) {
+                    if ((c > 0 && board[supportRow][c-1] && board[supportRow][c-1].toString().startsWith(isMe ? playerColor : opponentColor)) ||
+                        (c < 9 && board[supportRow][c+1] && board[supportRow][c+1].toString().startsWith(isMe ? playerColor : opponentColor))) {
+                        value += SCORES.GROUP_BONUS;
+                    }
+                }
+            }
             if (isMe) score += value; else score -= value;
         }
     }
-    return score;
+
+    // --- 2. INTUICJA SIECI NEURONOWEJ ---
+    const nnEval = predictBoard(board);
+    let adjustedNN = nnEval;
+    // Sieć zwraca + (White win) lub - (Black win).
+    // Musimy to obrócić, jeśli oceniamy z perspektywy 'black' (gdzie + ma być dla black)
+    if (playerColor === 'black') adjustedNN = -nnEval;
+
+    return score + adjustedNN;
 }
 
 function simulateCompleteMove(board, move, player) {
@@ -194,7 +223,6 @@ function simulateCompleteMove(board, move, player) {
 
     let currentRow = move.toRow;
     let currentCol = move.toCol;
-    
     while (true) {
         const nextCaptures = getPossibleCaptures(newBoard, currentRow, currentCol, piece, []);
         if (nextCaptures.length === 0) break;
@@ -208,7 +236,6 @@ function simulateCompleteMove(board, move, player) {
         currentRow = nextRow;
         currentCol = nextCol;
     }
-
     checkPromotion(newBoard, currentRow, currentCol);
     return newBoard;
 }
@@ -223,7 +250,7 @@ function checkPromotion(board, r, c) {
 }
 
 export function scoreToWinPercentage(score, player) {
-    const SCALE = 200;
+    const SCALE = 300;
     const winProb = 100 / (1 + Math.exp(-score / SCALE));
     return Math.max(0, Math.min(100, winProb));
 }
