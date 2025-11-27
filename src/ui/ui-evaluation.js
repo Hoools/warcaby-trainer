@@ -21,8 +21,7 @@ export function updateEvaluationDisplay(board, player) {
 
     // Używamy setTimeout, żeby nie blokować interfejsu przy cięższych obliczeniach
     setTimeout(() => {
-        // Pobieramy najlepsze ruchy (depth 5 dla analizy UI)
-        const data = getBestMoveWithEvaluation(board, player, 5);
+        const data = getBestMoveWithEvaluation(board, player, 10);
         
         updateBar(data.evaluation);
         updateTopMoves(data.topMoves);

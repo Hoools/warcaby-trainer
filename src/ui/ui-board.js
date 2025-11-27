@@ -1,7 +1,8 @@
 import { gameState } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
 import { getValidMoves, getPossibleCapturesForPiece, findCapturedPieceBetween, checkGameState } from '../core/rules.js';
-import { getBestMove } from '../core/ai.js'; // IMPORT AI
+import { getBestMove } from '../core/ai.js';
+import { updateEvaluationDisplay } from './ui-evaluation.js'; // <--- 1. IMPORT DODANY
 
 let selectedSquare = null, validMovesForSelected = [], pieceLockedForCapture = false, pendingCaptures = [];
 
@@ -48,8 +49,29 @@ export function renderBoard() {
       }
   }
   validMovesForSelected.forEach(m => document.querySelector(`#board .square[data-row='${m.toRow}'][data-col='${m.toCol}']`)?.classList.add('highlight'));
+  
+  // Wywołujemy funkcję debugującą (tę co dodaliśmy wcześniej)
+  if (typeof updateBoardStateDebug === 'function') updateBoardStateDebug();
+  
   applyBoardRotation();
-  updateBoardStateDebug(); 
+}
+
+// Funkcja pomocnicza do debugowania (dodana w poprzednim kroku, tu dla kompletności)
+function updateBoardStateDebug() {
+    const output = document.getElementById('board-state-output');
+    if (!output) return;
+    let text = `--- STAN GRY ---\nNa ruchu: ${gameState.currentPlayer}\nAktywna gra: ${gameState.gameActive}\n\n`;
+    const whites = [], blacks = [];
+    for(let r=0; r<10; r++) for(let c=0; c<10; c++) {
+        const p = gameState.grid[r][c];
+        if(p && typeof p === 'string') {
+            const fieldNum = (r * 5) + Math.floor(c/2) + 1; 
+            if(p.startsWith('white')) whites.push(fieldNum + (p.includes('king') ? '(D)' : ''));
+            if(p.startsWith('black')) blacks.push(fieldNum + (p.includes('king') ? '(D)' : ''));
+        }
+    }
+    text += `Białe: ${whites.join(', ')}\nCzarne: ${blacks.join(', ')}`;
+    output.textContent = text;
 }
 
 function onSquareClick(row, col) {
@@ -99,7 +121,11 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   pieceLockedForCapture = false; selectedSquare = null; validMovesForSelected = [];
   
   moveHistory.addMove({ fromRow, fromCol, toRow, toCol, previousBoard: prevBoard, previousPlayer: prevPlayer });
-  updateCurrentPlayerDisplay(); renderBoard();
+  updateCurrentPlayerDisplay(); 
+  renderBoard();
+
+  // --- 2. AKTUALIZACJA ANALIZY PO RUCHU ---
+  updateEvaluationDisplay(gameState.grid, gameState.currentPlayer);
   
   const winner = checkGameState(gameState.grid, gameState.currentPlayer);
   if (winner) {
@@ -108,7 +134,6 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   }
 
   // --- AI TRIGGER ---
-  // Tylko jeśli gra trwa, to tura komputera, ORAZ nie jesteśmy w trakcie wielokrotnego bicia
   if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor && !pieceLockedForCapture) {
       setTimeout(() => performAiMove(), 500);
   }
@@ -116,7 +141,6 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
 
 // --- LOGIKA RUCHÓW AI (W TYM WIELOKROTNE BICIE) ---
 async function performAiMove() {
-    // 1. Decyzja Minimaxa (pierwszy ruch)
     const move = getBestMove(gameState.grid, gameState.currentPlayer);
     
     if (!move) {
@@ -124,74 +148,24 @@ async function performAiMove() {
         return;
     }
 
-    // 2. Wykonanie pierwszego skoku
     makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol, move.isCapture);
 
-    // 3. Obsługa serii bić (jeśli makeMove zablokował pionka w trybie bicia)
     if (pieceLockedForCapture && selectedSquare) {
         await continueAiJumpChain();
     }
 }
 
 async function continueAiJumpChain() {
-    // Pętla rekurencyjna wykonująca kolejne skoki
     if (!pieceLockedForCapture || !selectedSquare) return;
 
-    // Opóźnienie dla efektu wizualnego
     await new Promise(r => setTimeout(r, 400));
-
     const moves = getValidMoves(gameState.grid, selectedSquare.row, selectedSquare.col, gameState.currentPlayer, pendingCaptures);
     if (moves.length > 0) {
-        // Wybieramy pierwszy dostępny ruch bicia (wymuszenie)
         const nextHop = moves[0];
-        
-        // Wykonujemy skok
         makeMove(selectedSquare.row, selectedSquare.col, nextHop.toRow, nextHop.toCol, nextHop.isCapture);
         
-        // Jeśli nadal trzeba bić, powtarzamy
         if (pieceLockedForCapture) {
             await continueAiJumpChain();
         }
     }
-}
-
-function updateBoardStateDebug() {
-    const output = document.getElementById('board-state-output');
-    if (!output) return;
-
-    let text = `--- STAN GRY ---\n`;
-    text += `Na ruchu: ${gameState.currentPlayer}\n`;
-    text += `Aktywna gra: ${gameState.gameActive}\n\n`;
-    
-    // Rysowanie prostej mapy ASCII
-    text += "  0 1 2 3 4 5 6 7 8 9\n";
-    for (let r = 0; r < 10; r++) {
-        text += r + " ";
-        for (let c = 0; c < 10; c++) {
-            const p = gameState.grid[r][c];
-            if (p === 0) text += ". ";
-            else if (p.startsWith('white')) text += p.includes('king') ? "W " : "w ";
-            else if (p.startsWith('black')) text += p.includes('king') ? "B " : "b ";
-        }
-        text += "\n";
-    }
-
-    // Lista pionków (FEN-like)
-    text += "\n--- POZYCJE ---\nBiałe: ";
-    const whites = [];
-    const blacks = [];
-    
-    for(let r=0; r<10; r++) for(let c=0; c<10; c++) {
-        const p = gameState.grid[r][c];
-        if(p && typeof p === 'string') {
-            // Konwersja na numerację 1-50
-            const fieldNum = (r * 5) + Math.floor(c/2) + 1; 
-            if(p.startsWith('white')) whites.push(fieldNum + (p.includes('king') ? '(D)' : ''));
-            if(p.startsWith('black')) blacks.push(fieldNum + (p.includes('king') ? '(D)' : ''));
-        }
-    }
-    text += whites.join(', ') + "\n";
-    text += "Czarne: " + blacks.join(', ');
-
-    output.textContent = text;
 }
