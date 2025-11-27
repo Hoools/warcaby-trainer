@@ -35,10 +35,7 @@ export function getBestMove(board, player, depth = 8) {
   return result.move;
 }
 
-// Zwraca: najlepszy ruch + oceny do panelu UI
-// scorePlayer: z perspektywy player (dodatni = dobrze dla gracza na ruchu)
-// scoreWhiteView: w konwencji szachowej (dodatni = dobrze dla białych)
-// winPercentWhite: szansa białych w %, liczona z scoreWhiteView
+// POPRAWIONA WERSJA - zwraca scorePlayer, scoreWhiteView, winPercentWhite
 export function getBestMoveWithEvaluation(board, player, depth = 7) {
   TRANSPOSITION_TABLE.clear();
 
@@ -46,7 +43,7 @@ export function getBestMoveWithEvaluation(board, player, depth = 7) {
   if (validMoves.length === 0) {
     const scorePlayer = -20000;
     const scoreWhiteView = player === "white" ? scorePlayer : -scorePlayer;
-    const winPercentWhite = scoreToWinPercentage(scoreWhiteView, "white");
+    const winPercentWhite = scoreToWinPercentage(scoreWhiteView);
     return {
       bestMove: null,
       evaluation: {
@@ -70,8 +67,9 @@ export function getBestMoveWithEvaluation(board, player, depth = 7) {
     if (scorePlayer === Infinity) scorePlayer = 15000;
     if (scorePlayer === -Infinity) scorePlayer = -15000;
 
+    // KLUCZ: konwersja na "white view"
     const scoreWhiteView = player === "white" ? scorePlayer : -scorePlayer;
-    const winPercentWhite = scoreToWinPercentage(scoreWhiteView, "white");
+    const winPercentWhite = scoreToWinPercentage(scoreWhiteView);
 
     return {
       move,
@@ -311,16 +309,16 @@ function checkPromotion(board, r, c) {
   const p = board[r][c];
   if (!p || typeof p !== "string" || p.includes("king")) return;
   if (p.startsWith("white") && r === 0) {
-    board[r][c] = p.split("0")[0] + "king";
+    board[r][c] = p.split("_")[0] + "_king";
   }
   if (p.startsWith("black") && r === 9) {
-    board[r][c] = p.split("0")[0] + "king";
+    board[r][c] = p.split("_")[0] + "_king";
   }
 }
 
-// scoreWhiteView -> prawdopodobieństwo wygranej białych
-export function scoreToWinPercentage(score, player) {
+// POPRAWIONA - bez drugiego parametru "player"
+export function scoreToWinPercentage(scoreWhiteView) {
   const SCALE = 300;
-  const winProb = 100 / (1 + Math.exp(-score / SCALE));
+  const winProb = 100 / (1 + Math.exp(-scoreWhiteView / SCALE));
   return Math.max(0, Math.min(100, winProb));
 }
