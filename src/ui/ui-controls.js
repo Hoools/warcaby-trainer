@@ -54,15 +54,83 @@ export function initControls() {
     });
 
     // --- 3. EDYTOR PLANSZY ---
+    if (!document.getElementById('editor-toolbar')) {
+        const toolbar = document.createElement('div');
+        toolbar.id = 'editor-toolbar';
+        toolbar.style.display = 'none'; // Domyślnie ukryty
+        toolbar.style.gap = '10px';
+        toolbar.style.marginTop = '10px';
+        toolbar.style.padding = '10px';
+        toolbar.style.background = 'rgba(0,0,0,0.5)';
+        toolbar.style.borderRadius = '8px';
+        
+        // Definicje dostępnych pionków
+        const pieces = [
+            { type: 'white', label: '⚪ Biały' },
+            { type: 'black', label: '⚫ Czarny' },
+            { type: 'white_king', label: '♕ B. Damka' },
+            { type: 'black_king', label: '♛ C. Damka' },
+            { type: 0, label: '❌ Usuń' }
+        ];
+
+        pieces.forEach(p => {
+            const btn = document.createElement('button');
+            btn.textContent = p.label;
+            btn.className = 'btn-small editor-tool';
+            btn.dataset.type = p.type;
+            btn.style.border = '1px solid #555';
+            
+            btn.addEventListener('click', () => {
+                gameState.selectedEditorPiece = p.type;
+                // Aktualizacja wyglądu aktywnego przycisku
+                document.querySelectorAll('.editor-tool').forEach(b => b.style.borderColor = '#555');
+                btn.style.borderColor = '#f1c40f';
+            });
+            
+            toolbar.appendChild(btn);
+        });
+
+        // Dodajemy pasek pod głównymi przyciskami
+        controlsDiv.appendChild(toolbar);
+    }
+
     const btnEditor = document.getElementById('btn-editor');
+    const toolbar = document.getElementById('editor-toolbar');
+
     btnEditor.addEventListener('click', () => {
         gameState.isEditorMode = !gameState.isEditorMode;
         btnEditor.textContent = gameState.isEditorMode ? 'Edytor: ON' : 'Edytor: OFF';
         btnEditor.style.background = gameState.isEditorMode ? '#e74c3c' : '#3498db';
 
-        // Jeśli włączamy edytor, czyścimy historię ruchów
+        // Pokaż/ukryj pasek narzędzi
+        if (toolbar) toolbar.style.display = gameState.isEditorMode ? 'flex' : 'none';
+
         if (gameState.isEditorMode) {
             moveHistory.clear();
+            // Domyślnie zaznacz pierwszy (biały)
+            gameState.selectedEditorPiece = 'white';
+            const firstBtn = toolbar.querySelector('button');
+            if(firstBtn) firstBtn.style.borderColor = '#f1c40f';
+        }
+    });
+    
+    // Obsługa klawiszy (zsynchronizowana z UI)
+    document.addEventListener('keydown', (e) => {
+        if (!gameState.isEditorMode) return;
+        
+        let type = null;
+        if (e.key === '1') type = 'white';
+        if (e.key === '2') type = 'black';
+        if (e.key === '3') type = 'white_king';
+        if (e.key === '4') type = 'black_king';
+        if (e.key === '0' || e.key === 'Delete') type = 0;
+
+        if (type !== null) {
+            gameState.selectedEditorPiece = type;
+            // Aktualizuj UI
+            document.querySelectorAll('.editor-tool').forEach(b => {
+                b.style.borderColor = (b.dataset.type == type) ? '#f1c40f' : '#555';
+            });
         }
     });
     
