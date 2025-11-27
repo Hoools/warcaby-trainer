@@ -10,7 +10,10 @@
     <div class="evaluation-panel">
         <div class="eval-header">
             <h3>Ocena pozycji</h3>
-            <button id="toggle-analysis" class="btn-small">Analiza ON/OFF</button>
+            <div style="display: flex; gap: 5px;">
+                <button id="toggle-ai" class="btn-small" style="background: #4a9eff;">AI: ON</button>
+                <button id="toggle-analysis" class="btn-small">Analiza: ON</button>
+            </div>
         </div>
 
         <!-- Pasek oceny jak w Stockfish -->
@@ -51,4 +54,3 @@
     <script type="module" src="./src/main.js"></script>
 </body>
 </html>
-

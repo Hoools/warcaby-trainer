@@ -2,7 +2,7 @@ import { gameState } from '../core/gameState.js';
 import { moveHistory } from '../core/moveHistory.js';
 import { getValidMoves, getPossibleCapturesForPiece, findCapturedPieceBetween, checkGameState } from '../core/rules.js';
 import { getBestMove } from '../core/ai.js';
-import { updateEvaluationDisplay } from './ui-evaluation.js'; // <--- 1. IMPORT DODANY
+import { updateEvaluationDisplay } from './ui-evaluation.js';
 
 let selectedSquare = null, validMovesForSelected = [], pieceLockedForCapture = false, pendingCaptures = [];
 
@@ -22,8 +22,8 @@ export function initUI() {
   applyBoardRotation(); 
   renderBoard();
 
-  // Jeśli gra zaczyna się turą AI (np. gracz wybrał Czarne)
-  if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor) {
+  // Jeśli gra zaczyna się turą AI
+  if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor) {
       setTimeout(() => performAiMove(), 1000);
   }
 }
@@ -50,17 +50,14 @@ export function renderBoard() {
   }
   validMovesForSelected.forEach(m => document.querySelector(`#board .square[data-row='${m.toRow}'][data-col='${m.toCol}']`)?.classList.add('highlight'));
   
-  // Wywołujemy funkcję debugującą (tę co dodaliśmy wcześniej)
   if (typeof updateBoardStateDebug === 'function') updateBoardStateDebug();
-  
   applyBoardRotation();
 }
 
-// Funkcja pomocnicza do debugowania (dodana w poprzednim kroku, tu dla kompletności)
 function updateBoardStateDebug() {
     const output = document.getElementById('board-state-output');
     if (!output) return;
-    let text = `--- STAN GRY ---\nNa ruchu: ${gameState.currentPlayer}\nAktywna gra: ${gameState.gameActive}\n\n`;
+    let text = `--- STAN GRY ---\nNa ruchu: ${gameState.currentPlayer}\nAktywna: ${gameState.gameActive}\nAI: ${gameState.aiEnabled}\n\n`;
     const whites = [], blacks = [];
     for(let r=0; r<10; r++) for(let c=0; c<10; c++) {
         const p = gameState.grid[r][c];
@@ -75,8 +72,8 @@ function updateBoardStateDebug() {
 }
 
 function onSquareClick(row, col) {
-  // Blokada klikania, gdy tura AI
-  if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor) return;
+  // Blokada klikania TYLKO jeśli AI jest włączone i to jego tura
+  if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor) return;
 
   if (gameState.isEditorMode) { if ((row + col) % 2 !== 0) { gameState.grid[row][col] = gameState.selectedEditorPiece; renderBoard(); } return; }
   if (pieceLockedForCapture) {
@@ -87,6 +84,8 @@ function onSquareClick(row, col) {
   }
   const piece = gameState.grid[row][col];
   if (pendingCaptures.some(cap => cap.r === row && cap.c === col)) return;
+  
+  // Pozwalamy klikać w bierki aktualnego gracza (niezależnie czy to człowiek czy komputer w trybie manualnym)
   if (piece && typeof piece === 'string' && piece.startsWith(gameState.currentPlayer)) {
     const moves = getValidMoves(gameState.grid, row, col, gameState.currentPlayer, pendingCaptures);
     selectedSquare = { row, col }; validMovesForSelected = moves; renderBoard(); 
@@ -105,18 +104,15 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
     const cap = findCapturedPieceBetween(gameState.grid, fromRow, fromCol, toRow, toCol);
     if (cap) pendingCaptures.push(cap);
     
-    // Sprawdzenie wielokrotnego bicia
     if (getPossibleCapturesForPiece(gameState.grid, toRow, toCol, pendingCaptures).length > 0 && getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures).length > 0) {
           pieceLockedForCapture = true; selectedSquare = { row: toRow, col: toCol }; validMovesForSelected = getValidMoves(gameState.grid, toRow, toCol, gameState.currentPlayer, pendingCaptures); renderBoard(); return;
     }
   }
   
-  // Koniec ruchu - czyszczenie
   if (pendingCaptures.length > 0) { pendingCaptures.forEach(c => gameState.grid[c.r][c.c] = 0); pendingCaptures = []; }
   const p = gameState.grid[toRow][toCol];
   if (p && !p.includes('king')) { if (gameState.currentPlayer === 'white' && toRow === 0) gameState.grid[toRow][toCol] = 'white_king'; if (gameState.currentPlayer === 'black' && toRow === 9) gameState.grid[toRow][toCol] = 'black_king'; }
   
-  // Zmiana gracza
   gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
   pieceLockedForCapture = false; selectedSquare = null; validMovesForSelected = [];
   
@@ -124,48 +120,35 @@ export function makeMove(fromRow, fromCol, toRow, toCol, isCapture) {
   updateCurrentPlayerDisplay(); 
   renderBoard();
 
-  // --- 2. AKTUALIZACJA ANALIZY PO RUCHU ---
   updateEvaluationDisplay(gameState.grid, gameState.currentPlayer);
   
   const winner = checkGameState(gameState.grid, gameState.currentPlayer);
   if (winner) {
       setTimeout(() => alert(`KONIEC GRY! Wygrywają: ${winner === 'white' ? 'Białe' : 'Czarne'}`), 100);
+      gameState.gameActive = false;
       return;
   }
 
-  // --- AI TRIGGER ---
-  if (gameState.gameActive && gameState.currentPlayer !== gameState.playerColor && !pieceLockedForCapture) {
+  // Trigger AI tylko jeśli włączone
+  if (gameState.gameActive && gameState.aiEnabled && gameState.currentPlayer !== gameState.playerColor && !pieceLockedForCapture) {
       setTimeout(() => performAiMove(), 500);
   }
 }
 
-// --- LOGIKA RUCHÓW AI (W TYM WIELOKROTNE BICIE) ---
 async function performAiMove() {
     const move = getBestMove(gameState.grid, gameState.currentPlayer);
-    
-    if (!move) {
-        console.log("AI poddaje się (brak ruchów).");
-        return;
-    }
-
+    if (!move) return;
     makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol, move.isCapture);
-
-    if (pieceLockedForCapture && selectedSquare) {
-        await continueAiJumpChain();
-    }
+    if (pieceLockedForCapture && selectedSquare) await continueAiJumpChain();
 }
 
 async function continueAiJumpChain() {
     if (!pieceLockedForCapture || !selectedSquare) return;
-
     await new Promise(r => setTimeout(r, 400));
     const moves = getValidMoves(gameState.grid, selectedSquare.row, selectedSquare.col, gameState.currentPlayer, pendingCaptures);
     if (moves.length > 0) {
         const nextHop = moves[0];
         makeMove(selectedSquare.row, selectedSquare.col, nextHop.toRow, nextHop.toCol, nextHop.isCapture);
-        
-        if (pieceLockedForCapture) {
-            await continueAiJumpChain();
-        }
+        if (pieceLockedForCapture) await continueAiJumpChain();
     }
 }
