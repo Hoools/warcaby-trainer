@@ -1,5 +1,3 @@
-// src/ui/ui-evaluation.js
-
 import { getBestMoveWithEvaluation } from "../core/ai.js";
 import { gameState } from "../core/gameState.js";
 
@@ -11,41 +9,33 @@ export function initEvaluationUI() {
     toggleBtn.addEventListener("click", () => {
       isAnalysisEnabled = !isAnalysisEnabled;
       toggleBtn.textContent = isAnalysisEnabled ? "Analiza ON" : "Analiza OFF";
-
+      
       const panel = document.querySelector(".eval-bar-container");
       const list = document.querySelector(".top-moves");
-      if (panel) panel.style.opacity = isAnalysisEnabled ? 1 : 0.3;
-      if (list) list.style.opacity = isAnalysisEnabled ? 1 : 0.3;
+      if (panel) panel.style.opacity = isAnalysisEnabled ? "1" : "0.3";
+      if (list) list.style.opacity = isAnalysisEnabled ? "1" : "0.3";
     });
   }
 }
 
-// board, player – kogo ruch analizujemy
 export function updateEvaluationDisplay(board, player) {
   if (!isAnalysisEnabled) return;
 
-  // Pokazujemy sugestie tylko dla wybranego koloru gracza
   if (gameState.aiEnabled && player !== gameState.playerColor) {
     const list = document.getElementById("topMovesList");
-    const scoreEl = document.getElementById("evalScore");
+    const score = document.getElementById("evalScore");
     if (list) list.innerHTML = '<div class="move-item">Ruch przeciwnika...</div>';
-    if (scoreEl) scoreEl.innerText = "...";
+    if (score) score.innerText = "...";
     return;
   }
 
-  const list = document.getElementById("topMovesList");
-  const scoreEl = document.getElementById("evalScore");
-  if (list) list.innerHTML = '<div class="move-item">Analiza...</div>';
-  if (scoreEl) scoreEl.innerText = "...";
-
   setTimeout(() => {
-    const data = getBestMoveWithEvaluation(board, player, 8); // Depth 8
+    const data = getBestMoveWithEvaluation(board, player, 7); // Depth 7 dla szybkości UI
     updateBar(data.evaluation);
-    updateTopMoves(data.topMoves, data.evaluation.player);
+    updateTopMoves(data.topMoves);
   }, 50);
 }
 
-// evalData: { scorePlayer, scoreWhiteView, winPercentWhite, player }
 function updateBar(evalData) {
   const scoreEl = document.getElementById("evalScore");
   const whiteBar = document.getElementById("evalBarWhite");
@@ -53,96 +43,63 @@ function updateBar(evalData) {
   const whitePerc = document.getElementById("whitePercentage");
   const blackPerc = document.getElementById("blackPercentage");
 
-  if (!scoreEl || !whiteBar || !blackBar || !whitePerc || !blackPerc) return;
+  if (!scoreEl || !whiteBar) return;
 
-  // Używamy scoreWhiteView – dodatni = przewaga białych (konwencja szachowa)
-  const displayScore = evalData.scoreWhiteView;
+  let displayScore = evalData.scoreWhiteView;
+  
+  const scoreNum = (Math.abs(displayScore) / 100).toFixed(2);
+  const sign = displayScore >= 0 ? "+" : "";
+  scoreEl.textContent = `${sign}${scoreNum}`;
+  scoreEl.style.color = displayScore >= 0 ? "#4a9eff" : "#ff6b6b";
 
-  // Szansa białych w %, bez kombinowania z perspektywą gracza
-  let whiteChance = evalData.winPercentWhite;
-  whiteChance = Math.max(5, Math.min(95, whiteChance)); // Clamp, żeby paski nie były 0/100
-  const blackChance = 100 - whiteChance;
+  let wp = evalData.winPercentWhite;
+  let whiteChance = wp;
+  whiteChance = Math.max(5, Math.min(95, whiteChance));
 
-  whiteBar.style.width = whiteChance + "%";
-  blackBar.style.width = blackChance + "%";
-
-  whitePerc.textContent = Math.round(whiteChance) + "%";
-  blackPerc.textContent = Math.round(blackChance) + "%";
-
-  const absScore = Math.abs(displayScore);
-  let text;
-  if (absScore > 10000) {
-    text = displayScore > 0 ? "Białe wygrywają" : "Czarne wygrywają";
-  } else {
-    const scoreNum = displayScore / 100;
-    text = (scoreNum >= 0 ? "+" : "") + scoreNum.toFixed(2);
-  }
-  scoreEl.textContent = text;
-  scoreEl.style.color = "#4a9eff";
+  if (whiteBar) whiteBar.style.width = `${whiteChance}%`;
+  if (blackBar) blackBar.style.width = `${100 - whiteChance}%`;
+  if (whitePerc) whitePerc.textContent = `${Math.round(whiteChance)}%`;
+  if (blackPerc) blackPerc.textContent = `${Math.round(100 - whiteChance)}%`;
 }
 
-// topMoves: { move, scorePlayer, scoreWhiteView, winPercentWhite, notation }[]
-// player: kto ma ruch (dla kogo liczony scorePlayer)
-function updateTopMoves(moves, player) {
+function updateTopMoves(moves) {
   const list = document.getElementById("topMovesList");
   if (!list) return;
 
   list.innerHTML = "";
-
-  if (!moves || moves.length === 0) {
+  if (moves.length === 0) {
     list.innerHTML = '<div class="move-item">Brak dobrych ruchów</div>';
     return;
   }
 
   moves.forEach((m, index) => {
     const div = document.createElement("div");
-    div.className = "move-item";
-    if (index === 0) div.classList.add("best");
+    div.className = `move-item ${index === 0 ? "best" : ""}`;
     div.style.cursor = "pointer";
     div.title = "Kliknij, aby wykonać ten ruch";
 
-    // Kliknięcie sugestii wykonuje ruch na planszy
+    div.addEventListener("mouseover", () => div.style.background = "#34495e");
+    div.addEventListener("mouseout", () => div.style.background = index === 0 ? "#1a2a1a" : "#1a1a1a");
+
     div.addEventListener("click", () => {
-      const event = new CustomEvent("forceMove", { detail: { ...m.move } });
+      const event = new CustomEvent("forceMove", { detail: m });
       document.dispatchEvent(event);
     });
 
-    const notationSpan = document.createElement("span");
-    notationSpan.className = "move-notation";
-    notationSpan.innerHTML = `${index + 1}. <strong>${m.notation}</strong>`;
+    let displayScore = m.scoreWhiteView;
+    const scoreDisplay = (Math.abs(displayScore) / 100).toFixed(2);
+    const sign = displayScore >= 0 ? "+" : "";
+    let winRateClass = "neutral";
+    if (m.winPercentWhite >= 60) winRateClass = "good";
+    if (m.winPercentWhite <= 40) winRateClass = "bad";
 
-    const evalDiv = document.createElement("div");
-    evalDiv.className = "move-eval";
-
-    // scorePlayer – z perspektywy gracza na ruchu
-    const scoreSpan = document.createElement("span");
-    scoreSpan.className = "move-score";
-    const sVal = m.scorePlayer / 100;
-    const sText = (sVal >= 0 ? "+" : "") + sVal.toFixed(2);
-    scoreSpan.textContent = sText;
-    scoreSpan.style.color = sVal >= 0 ? "#4a9eff" : "#ff6b6b";
-
-    // winPercentWhite – szansa białych
-    const winSpan = document.createElement("span");
-    winSpan.className = "move-winrate";
-    const wp = Math.round(m.winPercentWhite);
-    winSpan.textContent = `Białe: ${wp}%`;
-
-    // Kolorowanie jakości ruchu z punktu widzenia strony na ruchu
-    if (player === "white") {
-      if (wp >= 55) winSpan.classList.add("good");
-      else if (wp <= 35) winSpan.classList.add("bad");
-    } else {
-      if (wp <= 45) winSpan.classList.add("good");
-      else if (wp >= 65) winSpan.classList.add("bad");
-    }
-
-    evalDiv.appendChild(scoreSpan);
-    evalDiv.appendChild(winSpan);
-
-    div.appendChild(notationSpan);
-    div.appendChild(evalDiv);
-
+    div.innerHTML = `
+      <span class="move-notation">${index + 1}. <strong>${m.notation}</strong></span>
+      <div class="move-eval">
+        <span class="move-score" style="color: ${displayScore >= 0 ? '#4a9eff' : '#ff6b6b'}">${sign}${scoreDisplay}</span>
+        <span class="move-winrate ${winRateClass}">${Math.round(m.winPercentWhite)}%</span>
+      </div>
+    `;
     list.appendChild(div);
   });
 }

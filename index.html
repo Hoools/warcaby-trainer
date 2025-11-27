@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Warcaby Trainer AI</title>
+    <title>Warcaby Trainer</title>
     <link rel="stylesheet" href="assets/css/style.css">
-    <!-- TensorFlow.js -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
 </head>
 <body>
     <div class="evaluation-panel">
         <div class="eval-header">
             <h3>Ocena pozycji</h3>
             <div style="display: flex; gap: 5px;">
-                <button id="toggle-ai" class="btn-small" style="background: #4a9eff;">AI: ON</button>
-                <button id="toggle-analysis" class="btn-small">Analiza: ON</button>
+                <button id="toggle-ai" class="btn-small" style="background: #4a9eff;">AI ON</button>
+                <button id="toggle-analysis" class="btn-small">Analiza ON</button>
             </div>
         </div>
 
@@ -27,17 +25,12 @@
                     <span class="eval-percentage" id="whitePercentage">50%</span>
                 </div>
             </div>
-            <div class="eval-score" id="evalScore">+0.00</div>
+            <div class="eval-score" id="evalScore">0.00</div>
         </div>
 
         <div class="top-moves">
             <h4>Najlepsze ruchy</h4>
             <div id="topMovesList"></div>
-        </div>
-        
-        <!-- Status Sieci Neuronowej -->
-        <div style="margin-top: 15px; font-size: 12px; color: #888;">
-            Sieć Neuronowa: <span id="nn-status" style="color: #f1c40f;">Nieaktywna</span>
         </div>
     </div>
 
@@ -47,7 +40,6 @@
             <div id="board"></div>
             <div id="controls"></div>
         </div>
-
         <div id="side-panel">
             <h3>Stan Planszy</h3>
             <div id="board-state-output">Oczekiwanie na ruch...</div>

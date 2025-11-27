@@ -1,7 +1,8 @@
-import { getAllMovesForPlayer, findCapturedPieceBetween, getPossibleCaptures, calculateMaxCaptures } from "./rules.js";
-import { predictBoard } from "./neuralNet.js";
+// src/core/ai.js (wersja bez sieci neuronowej)
 
-// HYBRYDOWY SILNIK AI: Minimax + Sieć neuronowa
+import { getAllMovesForPlayer, findCapturedPieceBetween, getPossibleCaptures, calculateMaxCaptures } from "./rules.js";
+
+// KLASYCZNY SILNIK AI: Minimax + heurystyczna ocena pozycji
 
 const SCORES = {
   PAWN: 100,
@@ -11,7 +12,6 @@ const SCORES = {
   EDGESAFETY: 8,
   BACKROW: 15,
   PROMOTIONBONUS: 20,
-  CAPTURECHAIN: 50,
   GROUPBONUS: 3,
 };
 
@@ -35,7 +35,10 @@ export function getBestMove(board, player, depth = 8) {
   return result.move;
 }
 
-// POPRAWIONA WERSJA - zwraca scorePlayer, scoreWhiteView, winPercentWhite
+// Zwraca: najlepszy ruch + oceny do panelu UI
+// scorePlayer: z perspektywy player (dodatni = dobrze dla gracza na ruchu)
+// scoreWhiteView: w konwencji szachowej (dodatni = dobrze dla białych)
+// winPercentWhite: szansa białych w %, liczona z scoreWhiteView
 export function getBestMoveWithEvaluation(board, player, depth = 7) {
   TRANSPOSITION_TABLE.clear();
 
@@ -59,15 +62,13 @@ export function getBestMoveWithEvaluation(board, player, depth = 7) {
   const moveEvaluations = validMoves.map((move) => {
     const newBoard = simulateCompleteMove(board, move, player);
 
-    // Płytsze przeszukiwanie dla panelu
-    const searchDepth = Math.max(1, depth - 2);
+    const searchDepth = Math.max(1, depth);
     const evalResult = minimax(newBoard, searchDepth, -Infinity, Infinity, false, player);
 
     let scorePlayer = evalResult.score;
     if (scorePlayer === Infinity) scorePlayer = 15000;
     if (scorePlayer === -Infinity) scorePlayer = -15000;
 
-    // KLUCZ: konwersja na "white view"
     const scoreWhiteView = player === "white" ? scorePlayer : -scorePlayer;
     const winPercentWhite = scoreToWinPercentage(scoreWhiteView);
 
@@ -127,7 +128,6 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
 
   sortMoves(validMoves, board, currentPlayer);
 
-  // heurystyka: preferuj bicia + ogranicz liczbę ruchów
   let movesToSearch;
   if (depth >= 4) {
     const captures = validMoves.filter((m) => m.isCapture);
@@ -178,7 +178,8 @@ function sortMoves(moves, board, player) {
     move.priority = 0;
     if (move.isCapture) {
       move.priority += 10000;
-      move.priority += calculateMaxCaptures(board, move.fromRow, move.fromCol, board[move.fromRow][move.fromCol], []) * 100;
+      move.priority +=
+        calculateMaxCaptures(board, move.fromRow, move.fromCol, board[move.fromRow][move.fromCol], []) * 100;
     }
     if (player === "white" && move.toRow === 0) move.priority += 500;
     if (player === "black" && move.toRow === 9) move.priority += 500;
@@ -195,13 +196,12 @@ function sortMoves(moves, board, player) {
   moves.sort((a, b) => b.priority - a.priority);
 }
 
-// HYBRYDOWA OCENA: klasyczna + sieć neuronowa
+// CZYSTO HEURYSTYCZNA OCENA (bez NN)
 // ZWRACA scorePlayer: dodatni = dobrze dla playerColor, ujemny = dobrze dla przeciwnika
 function evaluateBoard(board, playerColor) {
   let score = 0;
   const opponentColor = playerColor === "white" ? "black" : "white";
 
-  // 1. Klasyczna ocena
   for (let r = 0; r < 10; r++) {
     for (let c = 0; c < 10; c++) {
       const p = board[r][c];
@@ -229,7 +229,6 @@ function evaluateBoard(board, playerColor) {
         if (advanceRow >= 7) value += SCORES.PROMOTIONBONUS;
       }
 
-      // Group bonus
       const supportRow = p.startsWith("white") ? r + 1 : r - 1;
       if (supportRow >= 0 && supportRow < 10) {
         if (c > 0) {
@@ -240,7 +239,7 @@ function evaluateBoard(board, playerColor) {
         }
         if (c < 9) {
           const s = board[supportRow][c + 1];
-          if (s && typeof s === "string" && s.startsWith(isMe ? playerColor : opponentColor)) {
+          if (s && typeof s === "string" && s.startswith ? s.startsWith(isMe ? playerColor : opponentColor) : s.startsWith(isMe ? playerColor : opponentColor)) {
             value += SCORES.GROUPBONUS;
           }
         }
@@ -251,14 +250,7 @@ function evaluateBoard(board, playerColor) {
     }
   }
 
-  // 2. Intuicja sieci neuronowej (predictBoard zwraca >0 dla przewagi białych)
-  const nnEval = predictBoard(board);
-  let adjustedNN = nnEval;
-  if (playerColor === "black") {
-    adjustedNN = -nnEval;
-  }
-
-  return score + adjustedNN;
+  return score;
 }
 
 function simulateCompleteMove(board, move, player) {
@@ -316,9 +308,9 @@ function checkPromotion(board, r, c) {
   }
 }
 
-// POPRAWIONA - bez drugiego parametru "player"
+// scoreWhiteView -> prawdopodobieństwo wygranej białych (miękka skala)
 export function scoreToWinPercentage(scoreWhiteView) {
-  const SCALE = 300;
+  const SCALE = 800;
   const winProb = 100 / (1 + Math.exp(-scoreWhiteView / SCALE));
   return Math.max(0, Math.min(100, winProb));
 }
