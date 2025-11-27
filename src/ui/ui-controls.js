@@ -57,20 +57,21 @@ export function initControls() {
     if (!document.getElementById('editor-toolbar')) {
         const toolbar = document.createElement('div');
         toolbar.id = 'editor-toolbar';
-        toolbar.style.display = 'none'; // Domyślnie ukryty
+        toolbar.style.display = 'none';
+        toolbar.style.flexWrap = 'wrap'; // Żeby przyciski się mieściły
         toolbar.style.gap = '10px';
         toolbar.style.marginTop = '10px';
         toolbar.style.padding = '10px';
         toolbar.style.background = 'rgba(0,0,0,0.5)';
         toolbar.style.borderRadius = '8px';
         
-        // Definicje dostępnych pionków
+        // Grupa 1: Wybór pionków
         const pieces = [
             { type: 'white', label: '⚪ Biały' },
             { type: 'black', label: '⚫ Czarny' },
-            { type: 'white_king', label: '♕ B. Damka' },
-            { type: 'black_king', label: '♛ C. Damka' },
-            { type: 0, label: '❌ Usuń' }
+            { type: 'white_king', label: '♕ B.Król' },
+            { type: 'black_king', label: '♛ C.Król' },
+            { type: 0, label: '❌ Gumka' }
         ];
 
         pieces.forEach(p => {
@@ -79,20 +80,41 @@ export function initControls() {
             btn.className = 'btn-small editor-tool';
             btn.dataset.type = p.type;
             btn.style.border = '1px solid #555';
+            btn.style.minWidth = '60px';
             
             btn.addEventListener('click', () => {
                 gameState.selectedEditorPiece = p.type;
-                // Aktualizacja wyglądu aktywnego przycisku
                 document.querySelectorAll('.editor-tool').forEach(b => b.style.borderColor = '#555');
                 btn.style.borderColor = '#f1c40f';
             });
-            
             toolbar.appendChild(btn);
         });
 
-        // Dodajemy pasek pod głównymi przyciskami
+        // Grupa 2: Separator i Akcje globalne
+        const separator = document.createElement('div');
+        separator.style.flexBasis = '100%'; // Nowa linia dla akcji
+        toolbar.appendChild(separator);
+
+        // PRZYCISK: WYCZYŚĆ PLANSZĘ
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = '🗑️ Wyczyść planszę';
+        clearBtn.className = 'btn-small';
+        clearBtn.style.background = '#c0392b'; // Czerwony kolor
+        clearBtn.style.width = '100%';
+        
+        clearBtn.addEventListener('click', () => {
+            if (confirm('Czy na pewno chcesz usunąć wszystkie pionki?')) {
+                clearBoard(); // Funkcja z core/gameState.js
+                renderBoard();
+            }
+        });
+        toolbar.appendChild(clearBtn);
+
         controlsDiv.appendChild(toolbar);
     }
+
+    // ... reszta kodu obsługi przycisku btn-editor bez zmian ...
+
 
     const btnEditor = document.getElementById('btn-editor');
     const toolbar = document.getElementById('editor-toolbar');
