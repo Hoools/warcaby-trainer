@@ -1,7 +1,7 @@
 import { getAllMovesForPlayer, findCapturedPieceBetween, getPossibleCaptures, calculateMaxCaptures } from './rules.js';
 
 // ===========================
-// ZAAWANSOWANY SILNIK AI (POPRAWIONY)
+// ZAAWANSOWANY SILNIK AI (V2 - Z ANALIZĄ RUCHÓW)
 // ===========================
 
 const SCORES = {
@@ -31,9 +31,66 @@ function boardHash(board, player) {
 export function getBestMove(board, player, depth = 6) {
     TRANSPOSITION_TABLE.clear();
     const boardCopy = JSON.parse(JSON.stringify(board));
-    // Używamy minimax z alfa-beta
     const result = minimax(boardCopy, depth, -Infinity, Infinity, true, player);
     return result.move;
+}
+
+// --- NOWA FUNKCJA: Generuje pełną analizę dla UI ---
+export function getBestMoveWithEvaluation(board, player, depth = 5) {
+    TRANSPOSITION_TABLE.clear();
+    const validMoves = getAllMovesForPlayer(board, player);
+
+    if (validMoves.length === 0) {
+        return { 
+            bestMove: null, 
+            evaluation: { score: -10000, winPercent: 0, player }, 
+            topMoves: [] 
+        };
+    }
+
+    // Oceniamy każdy ruch z osobna
+    const moveEvaluations = validMoves.map(move => {
+        const newBoard = simulateCompleteMove(board, move, player);
+        
+        // Płytsze przeszukiwanie dla listy ruchów (dla wydajności)
+        // depth-2, ale minimum 1
+        const searchDepth = Math.max(1, depth - 2);
+        
+        // Ponieważ wykonaliśmy ruch, teraz kolej przeciwnika -> minimalizujemy jego zysk
+        // (czyli isMaximizing = false z perspektywy gracza 'player')
+        const evalResult = minimax(newBoard, searchDepth, -Infinity, Infinity, false, player);
+
+        return {
+            move: move,
+            score: evalResult.score,
+            winPercent: scoreToWinPercentage(evalResult.score, player),
+            notation: getMoveNotation(move)
+        };
+    });
+
+    // Sortujemy od najlepszego do najgorszego
+    moveEvaluations.sort((a, b) => b.score - a.score);
+
+    const bestOption = moveEvaluations[0];
+
+    return {
+        bestMove: bestOption.move,
+        evaluation: { 
+            score: bestOption.score, 
+            winPercent: bestOption.winPercent, 
+            player 
+        },
+        // Zwracamy Top 5
+        topMoves: moveEvaluations.slice(0, 5)
+    };
+}
+
+function getMoveNotation(move) {
+    // Konwersja na notację 1-50
+    // Wzór: 5 * wiersz + floor(kolumna/2) + 1
+    const from = (move.fromRow * 5) + Math.floor(move.fromCol / 2) + 1;
+    const to = (move.toRow * 5) + Math.floor(move.toCol / 2) + 1;
+    return `${from}-${to}`;
 }
 
 function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
@@ -54,8 +111,6 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
 
     sortMoves(validMoves, board, currentPlayer);
     
-    // Ograniczenie liczby sprawdzanych ruchów dla głębszych poziomów (Move pruning)
-    // Sprawdzamy tylko 8 najlepszych ruchów, chyba że to bicia (bicia zawsze sprawdzamy)
     const movesToSearch = depth > 4 ? validMoves.filter(m => m.isCapture).concat(validMoves.filter(m => !m.isCapture).slice(0, 8)) : validMoves;
 
     let bestMove = null;
@@ -90,22 +145,13 @@ function minimax(board, depth, alpha, beta, isMaximizing, playerColor) {
 function sortMoves(moves, board, player) {
     moves.forEach(move => {
         move.priority = 0;
-        // Bicia mają absolutny priorytet
         if (move.isCapture) {
             move.priority += 10000;
-            // Preferuj bicia, które zbijają więcej pionków (heurystyka)
-            // Symulujemy płytko, żeby sprawdzić ile bić nastąpi
             move.priority += calculateMaxCaptures(board, move.fromRow, move.fromCol, board[move.fromRow][move.fromCol], []) * 100;
         }
-        
-        // Promocja do damki
         if ((player === 'white' && move.toRow === 0) || (player === 'black' && move.toRow === 9)) move.priority += 500;
-        
-        // Ruchy damką
         const piece = board[move.fromRow][move.fromCol];
         if (piece && piece.includes('king')) move.priority += 200;
-        
-        // Kontrola centrum
         const centerDist = Math.abs(4.5 - move.toRow) + Math.abs(4.5 - move.toCol);
         move.priority += (20 - centerDist) * 5;
     });
@@ -125,71 +171,47 @@ function evaluateBoard(board, playerColor) {
             if (!isMe && !isOpponent) continue;
 
             let value = p.includes('king') ? SCORES.KING : SCORES.PAWN;
-            
-            // Bonusy pozycyjne
             const centerDist = Math.abs(4.5 - r) + Math.abs(4.5 - c);
             if (centerDist <= 2) value += SCORES.CENTER_CONTROL;
-            
-            // Pionki na bandach są bezpieczniejsze
             if (c === 0 || c === 9) value += SCORES.EDGE_SAFETY;
-
-            // Zaawansowanie
             if (!p.includes('king')) {
                 const advanceRow = p.startsWith('white') ? (9 - r) : r;
                 value += advanceRow * SCORES.ADVANCED_POSITION;
                 if (advanceRow >= 7) value += SCORES.PROMOTION_BONUS;
             }
-
             if (isMe) score += value; else score -= value;
         }
     }
     return score;
 }
 
-// --- KLUCZOWA ZMIANA: Rekurencyjna symulacja całego łańcucha ---
 function simulateCompleteMove(board, move, player) {
     const newBoard = JSON.parse(JSON.stringify(board));
-    
-    // Przesuwamy pionek (pierwszy skok)
     const piece = newBoard[move.fromRow][move.fromCol];
     newBoard[move.toRow][move.toCol] = piece;
     newBoard[move.fromRow][move.fromCol] = 0;
 
-    // Jeśli to nie bicie, kończymy i sprawdzamy promocję
     if (!move.isCapture) {
         checkPromotion(newBoard, move.toRow, move.toCol);
         return newBoard;
     }
 
-    // Jeśli to bicie, usuwamy zbity pionek
     const cap = findCapturedPieceBetween(newBoard, move.fromRow, move.fromCol, move.toRow, move.toCol);
     if (cap) newBoard[cap.r][cap.c] = 0;
 
-    // REKURENCJA: Sprawdzamy czy pionek musi bić dalej
-    // Symulujemy "wymuszenie" dalszych bić (Greedy approach - bierzemy pierwsze możliwe dalsze bicie)
     let currentRow = move.toRow;
     let currentCol = move.toCol;
     
     while (true) {
-        // Pobieramy możliwe dalsze bicia z nowej pozycji
-        // Musimy uważać, żeby nie przekazać 'pendingCaptures' błędnie, tu upraszczamy
         const nextCaptures = getPossibleCaptures(newBoard, currentRow, currentCol, piece, []);
-        
         if (nextCaptures.length === 0) break;
-
-        // Wybieramy pierwszy lepszy (w prawdziwym silniku powinniśmy rozgałęziać, ale dla szybkości bierzemy jeden)
-        const nextJump = nextCaptures[0]; // [row, col]
+        const nextJump = nextCaptures[0]; 
         const nextRow = nextJump[0];
         const nextCol = nextJump[1];
-
-        // Wykonaj skok w pamięci
         newBoard[nextRow][nextCol] = piece;
         newBoard[currentRow][currentCol] = 0;
-
-        // Usuń zbitego
         const nextCap = findCapturedPieceBetween(newBoard, currentRow, currentCol, nextRow, nextCol);
         if (nextCap) newBoard[nextCap.r][nextCap.c] = 0;
-
         currentRow = nextRow;
         currentCol = nextCol;
     }
@@ -207,21 +229,8 @@ function checkPromotion(board, r, c) {
     }
 }
 
-// === HELPERS FOR UI ===
 export function scoreToWinPercentage(score, player) {
     const SCALE = 300;
     const winProb = 100 / (1 + Math.exp(-score / SCALE));
     return Math.max(0, Math.min(100, winProb));
-}
-
-export function getBestMoveWithEvaluation(board, player, depth = 6) {
-    const bestMoveMove = getBestMove(board, player, depth);
-    // Odtwarzamy ocenę dla UI (trochę hack, ale oszczędza czas)
-    const score = evaluateBoard(simulateCompleteMove(board, bestMoveMove, player), player);
-    
-    return {
-        bestMove: bestMoveMove,
-        evaluation: { score: score, winPercent: scoreToWinPercentage(score, player), player },
-        topMoves: [] // Można rozbudować w przyszłości
-    };
 }
